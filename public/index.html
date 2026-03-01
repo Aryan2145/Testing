@@ -31,6 +31,12 @@
     <p class="value" id="api-secret"></p>
   </div>
 
+  <div class="card">
+    <div class="label">Supabase &mdash; /api/db</div>
+    <p class="value" id="db-status">Loading&hellip;</p>
+    <p class="value" id="db-project"></p>
+  </div>
+
   <script>
     fetch('/api/hello')
       .then(function(res) { return res.json(); })
@@ -41,6 +47,24 @@
       .catch(function(err) {
         document.getElementById('api-message').className = 'value error';
         document.getElementById('api-message').textContent = 'Error: ' + err.message;
+      });
+
+    fetch('/api/db')
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        var el = document.getElementById('db-status');
+        if (data.connected) {
+          el.textContent = 'Connected (HTTP ' + data.status + ')';
+          el.style.color = '#1a7f37';
+          document.getElementById('db-project').textContent = data.project;
+        } else {
+          el.textContent = 'Failed: ' + (data.error || data.status);
+          el.className = 'value error';
+        }
+      })
+      .catch(function(err) {
+        document.getElementById('db-status').className = 'value error';
+        document.getElementById('db-status').textContent = 'Error: ' + err.message;
       });
   </script>
 </body>
