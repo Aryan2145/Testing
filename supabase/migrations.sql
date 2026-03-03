@@ -240,7 +240,34 @@ CREATE OR REPLACE TRIGGER users_updated_at BEFORE UPDATE ON users FOR EACH ROW E
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 
 -- ================================================================
--- F) WEEKLY PLAN
+-- F) DAILY ACTIVITY VISITS
+-- ================================================================
+
+CREATE TABLE IF NOT EXISTS daily_visits (
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id     UUID NOT NULL,
+  user_id       UUID NOT NULL REFERENCES users(id),
+  visit_date    DATE NOT NULL,
+  visit_type    TEXT NOT NULL CHECK (visit_type IN ('Dealer', 'Distributor')),
+  entity_id     UUID,
+  entity_name   TEXT NOT NULL,
+  is_new_entity BOOLEAN NOT NULL DEFAULT FALSE,
+  start_time    TIMESTAMPTZ,
+  end_time      TIMESTAMPTZ,
+  duration_secs INT,
+  latitude      NUMERIC(10,7),
+  longitude     NUMERIC(10,7),
+  address       TEXT,
+  status        TEXT NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending', 'Active', 'Completed')),
+  notes         TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE OR REPLACE TRIGGER daily_visits_updated_at BEFORE UPDATE ON daily_visits FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+ALTER TABLE daily_visits ENABLE ROW LEVEL SECURITY;
+
+-- ================================================================
+-- G) WEEKLY PLAN
 -- ================================================================
 
 CREATE TABLE IF NOT EXISTS weekly_plans (
