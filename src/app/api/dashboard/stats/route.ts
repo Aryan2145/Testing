@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { getTenantId } from '@/lib/tenant'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   const supabase = createServerSupabase()
   const tid = getTenantId()
