@@ -14,59 +14,94 @@ type OrderItem = {
 
 export async function GET(req: NextRequest) {
   const user = await requireUser()
-  const visitId = req.nextUrl.searchParams.get('visitId')
-  if (!visitId) return NextResponse.json({ error: 'visitId is required' }, { status: 400 })
-
   const supabase = createServerSupabase()
-  const { data: order, error } = await supabase
-    .from('orders')
-    .select('*, order_items(*)')
-    .eq('tenant_id', getTenantId())
-    .eq('visit_id', visitId)
-    .single()
+  const tid = getTenantId()
+  const visitId = req.nextUrl.searchParams.get('visitId')
 
-  if (error && error.code !== 'PGRST116') {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  // Single-order mode (used by OrderEntryModal in Daily Activity — unchanged)
+  if (visitId) {
+    const { data: order, error } = await supabase
+      .from('orders')
+      .select('*, order_items(*)')
+      .eq('tenant_id', tid)
+      .eq('visit_id', visitId)
+      .single()
+    if (error && error.code !== 'PGRST116') {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+    return NextResponse.json(order ?? null)
   }
-  return NextResponse.json(order ?? null)
+
+  // List mode — returns orders for current user + their direct reports
+  const status = req.nextUrl.searchParams.get('status')
+  const dateFrom = req.nextUrl.searchParams.get('dateFrom')
+  const dateTo = req.nextUrl.searchParams.get('dateTo')
+  const userId = req.nextUrl.searchParams.get('userId')
+  const q = req.nextUrl.searchParams.get('q')
+
+  // Determine allowed user IDs (current user + direct reports)
+  const { data: reports } = await supabase
+    .from('users')
+    .select('id')
+    .eq('tenant_id', tid)
+    .eq('manager_user_id', user.userId!)
+  const allowedIds = [user.userId!, ...(reports ?? []).map((r: { id: string }) => r.id)]
+
+  let query = supabase
+    .from('orders')
+    .select('*, order_items(count), users!orders_user_id_fkey(name)')
+    .eq('tenant_id', tid)
+    .in('user_id', userId ? [userId] : allowedIds)
+    .order('order_date', { ascending: false })
+    .order('created_at', { ascending: false })
+
+  if (status) query = query.eq('status', status)
+  if (dateFrom) query = query.gte('order_date', dateFrom)
+  if (dateTo) query = query.lte('order_date', dateTo)
+  if (q) query = query.ilike('entity_name', `%${q}%`)
+
+  const { data, error } = await query
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json(data ?? [])
 }
 
 export async function POST(req: NextRequest) {
   const user = await requireUser()
-  const { visit_id, order_date, items } = await req.json() as {
-    visit_id: string
-    order_date: string
-    items: OrderItem[]
-  }
-
-  if (!visit_id || !order_date || !Array.isArray(items)) {
-    return NextResponse.json({ error: 'visit_id, order_date and items are required' }, { status: 400 })
-  }
-
+  const body = await req.json()
   const tenantId = getTenantId()
   const supabase = createServerSupabase()
 
+  const items: OrderItem[] = body.items ?? []
+  if (!Array.isArray(items) || items.length === 0) {
+    return NextResponse.json({ error: 'items are required' }, { status: 400 })
+  }
+
   const total = items.reduce((sum, i) => sum + i.qty * i.rate, 0)
 
-  // Upsert order
-  const { data: order, error: orderErr } = await supabase
-    .from('orders')
-    .upsert(
-      { tenant_id: tenantId, user_id: user.userId, visit_id, order_date, total_amount: total },
-      { onConflict: 'visit_id' }
-    )
-    .select()
-    .single()
+  let orderId: string
 
-  if (orderErr) return NextResponse.json({ error: orderErr.message }, { status: 500 })
+  if (body.visit_id) {
+    // --- Meeting-based flow (unchanged) ---
+    const { visit_id, order_date } = body as { visit_id: string; order_date: string }
+    if (!order_date) return NextResponse.json({ error: 'order_date is required' }, { status: 400 })
 
-  // Delete old items then insert new
-  await supabase.from('order_items').delete().eq('order_id', order.id)
+    const { data: order, error: orderErr } = await supabase
+      .from('orders')
+      .upsert(
+        { tenant_id: tenantId, user_id: user.userId, visit_id, order_date, total_amount: total },
+        { onConflict: 'visit_id' }
+      )
+      .select()
+      .single()
 
-  if (items.length > 0) {
+    if (orderErr) return NextResponse.json({ error: orderErr.message }, { status: 500 })
+    orderId = order.id
+
+    await supabase.from('order_items').delete().eq('order_id', orderId)
+
     const rows = items.map(i => ({
       tenant_id: tenantId,
-      order_id: order.id,
+      order_id: orderId,
       product_id: i.product_id ?? null,
       product_name: i.product_name,
       qty: i.qty,
@@ -75,7 +110,57 @@ export async function POST(req: NextRequest) {
     }))
     const { error: itemsErr } = await supabase.from('order_items').insert(rows)
     if (itemsErr) return NextResponse.json({ error: itemsErr.message }, { status: 500 })
+
+    return NextResponse.json({ ...order, total_amount: total }, { status: 201 })
   }
+
+  // --- Direct order flow ---
+  const { order_source, entity_type, entity_id, entity_name, sales_user_id, order_date, status } = body as {
+    order_source: 'direct'
+    entity_type: 'Dealer' | 'Distributor'
+    entity_id: string
+    entity_name: string
+    sales_user_id?: string
+    order_date: string
+    status?: 'Draft' | 'Submitted' | 'Confirmed'
+  }
+
+  if (!entity_id || !entity_name || !order_date) {
+    return NextResponse.json({ error: 'entity_id, entity_name and order_date are required' }, { status: 400 })
+  }
+
+  const effectiveUserId = sales_user_id ?? user.userId!
+
+  const { data: order, error: orderErr } = await supabase
+    .from('orders')
+    .insert({
+      tenant_id: tenantId,
+      user_id: effectiveUserId,
+      order_source: 'direct',
+      entity_type,
+      entity_id,
+      entity_name,
+      order_date,
+      status: status ?? 'Draft',
+      total_amount: total,
+    })
+    .select()
+    .single()
+
+  if (orderErr) return NextResponse.json({ error: orderErr.message }, { status: 500 })
+  orderId = order.id
+
+  const rows = items.map(i => ({
+    tenant_id: tenantId,
+    order_id: orderId,
+    product_id: i.product_id ?? null,
+    product_name: i.product_name,
+    qty: i.qty,
+    rate: i.rate,
+    amount: i.qty * i.rate,
+  }))
+  const { error: itemsErr } = await supabase.from('order_items').insert(rows)
+  if (itemsErr) return NextResponse.json({ error: itemsErr.message }, { status: 500 })
 
   return NextResponse.json({ ...order, total_amount: total }, { status: 201 })
 }
