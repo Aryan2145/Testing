@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import { useRouter, useParams } from 'next/navigation'
+import { useState, useEffect, useCallback, useMemo, Suspense } from 'react'
+import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import StatusBadge from '@/components/ui/StatusBadge'
 import Modal from '@/components/ui/Modal'
 import { useToast } from '@/contexts/ToastContext'
 import CalendarPicker from '@/components/ui/CalendarPicker'
+import RemarksPanel from '@/components/ui/RemarksPanel'
 
 // ---- Helpers ----
 function getMondayOf(date: Date): Date {
@@ -16,7 +17,12 @@ function getMondayOf(date: Date): Date {
   d.setHours(0, 0, 0, 0)
   return d
 }
-function toDateStr(d: Date) { return d.toISOString().split('T')[0] }
+function toDateStr(d: Date) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
 function addDays(d: Date, n: number) { const r = new Date(d); r.setDate(r.getDate() + n); return r }
 function formatDayHeader(dateStr: string) {
   const d = new Date(dateStr + 'T00:00:00')
@@ -56,6 +62,8 @@ type Visit = {
 type Expense = {
   id: string; category: string; amount: number; notes: string | null; expense_date: string
 }
+
+type RemarksState = { contextType: 'meeting' | 'expense'; contextId: string; title: string } | null
 
 const CATEGORY_COLORS: Record<string, string> = {
   Travel: 'bg-blue-100 text-blue-700', Food: 'bg-orange-100 text-orange-700',
@@ -266,7 +274,7 @@ function WeeklyPlansTab({ userId }: { userId: string }) {
 }
 
 // ---- Daily Activity Tab ----
-function DailyActivityTab({ userId }: { userId: string }) {
+function DailyActivityTab({ userId, onOpenRemarks }: { userId: string; onOpenRemarks: (ctx: { contextType: 'meeting'; contextId: string; title: string }) => void }) {
   const [selectedDate, setSelectedDate] = useState(toDateStr(new Date()))
   const [weekOffset, setWeekOffset] = useState(0)
   const [visits, setVisits] = useState<Visit[]>([])
@@ -322,6 +330,14 @@ function DailyActivityTab({ userId }: { userId: string }) {
                   {v.end_time && <span>Ended {new Date(v.end_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>}
                   {v.status === 'Completed' && v.duration_secs != null && <span className="text-emerald-600 font-medium">{formatDuration(v.duration_secs)}</span>}
                 </div>
+                <div className="mt-2 pt-2 border-t border-gray-100 flex justify-end">
+                  <button onClick={() => onOpenRemarks({ contextType: 'meeting', contextId: v.id, title: v.entity_name })}
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition" title="Remarks">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -332,7 +348,7 @@ function DailyActivityTab({ userId }: { userId: string }) {
 }
 
 // ---- Expenses Tab ----
-function ExpensesTab({ userId }: { userId: string }) {
+function ExpensesTab({ userId, onOpenRemarks }: { userId: string; onOpenRemarks: (ctx: { contextType: 'expense'; contextId: string; title: string }) => void }) {
   const [selectedDate, setSelectedDate] = useState(toDateStr(new Date()))
   const [weekOffset, setWeekOffset] = useState(0)
   const [expenses, setExpenses] = useState<Expense[]>([])
@@ -382,6 +398,14 @@ function ExpensesTab({ userId }: { userId: string }) {
                 <span className="text-base font-bold text-gray-900 ml-auto">₹{Number(exp.amount).toFixed(0)}</span>
               </div>
               {exp.notes && <p className="text-sm text-gray-500 mt-1.5">{exp.notes}</p>}
+              <div className="mt-2 pt-2 border-t border-gray-100 flex justify-end">
+                <button onClick={() => onOpenRemarks({ contextType: 'expense', contextId: exp.id, title: `${exp.category} — ₹${Number(exp.amount).toFixed(0)}` })}
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition" title="Remarks">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
+                  </svg>
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -390,19 +414,32 @@ function ExpensesTab({ userId }: { userId: string }) {
   )
 }
 
-// ---- Main Page ----
-export default function ReviewUserPage() {
+// ---- Main Page (inner — uses useSearchParams) ----
+function ReviewUserInner() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const userId = params.userId as string
 
   const [userName, setUserName] = useState('')
   const [userLevel, setUserLevel] = useState('')
-  const [tab, setTab] = useState<'plans' | 'activity' | 'expenses'>('plans')
+  const initialTab = (searchParams.get('tab') as 'plans' | 'activity' | 'expenses') ?? 'plans'
+  const [tab, setTab] = useState<'plans' | 'activity' | 'expenses'>(initialTab)
   const [meLoaded, setMeLoaded] = useState(false)
 
+  // Remarks panel state
+  const [remarksPanel, setRemarksPanel] = useState<RemarksState>(null)
+
+  // Deep link: auto-open remarks from URL
+  const initialRemarks = searchParams.get('remarks')
   useEffect(() => {
-    // Fetch user info from summary cards
+    if (initialRemarks) {
+      const ctxType = tab === 'expenses' ? 'expense' : 'meeting'
+      setRemarksPanel({ contextType: ctxType as 'meeting' | 'expense', contextId: initialRemarks, title: 'Remarks' })
+    }
+  }, [initialRemarks, tab])
+
+  useEffect(() => {
     fetch('/api/review/summary-cards').then(r => r.json()).then((cards: { id: string; name: string; level: string }[]) => {
       const found = cards.find((c) => c.id === userId)
       if (found) { setUserName(found.name); setUserLevel(found.level) }
@@ -444,10 +481,29 @@ export default function ReviewUserPage() {
       {meLoaded && (
         <>
           {tab === 'plans' && <WeeklyPlansTab userId={userId} />}
-          {tab === 'activity' && <DailyActivityTab userId={userId} />}
-          {tab === 'expenses' && <ExpensesTab userId={userId} />}
+          {tab === 'activity' && <DailyActivityTab userId={userId} onOpenRemarks={setRemarksPanel} />}
+          {tab === 'expenses' && <ExpensesTab userId={userId} onOpenRemarks={setRemarksPanel} />}
         </>
       )}
+
+      {/* Remarks Panel */}
+      {remarksPanel && (
+        <RemarksPanel
+          isOpen={!!remarksPanel}
+          onClose={() => setRemarksPanel(null)}
+          contextType={remarksPanel.contextType}
+          contextId={remarksPanel.contextId}
+          contextTitle={remarksPanel.title}
+        />
+      )}
     </div>
+  )
+}
+
+export default function ReviewUserPage() {
+  return (
+    <Suspense fallback={<div className="text-center py-16 text-gray-400">Loading...</div>}>
+      <ReviewUserInner />
+    </Suspense>
   )
 }

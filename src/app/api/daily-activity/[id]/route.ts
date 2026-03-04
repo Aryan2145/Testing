@@ -30,13 +30,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   if (action === 'stop') {
+    const { end_latitude, end_longitude, end_address } = body
     const { data: visit } = await supabase.from('daily_visits').select('start_time').eq('id', params.id).single()
     const durationSecs = visit?.start_time
       ? Math.floor((Date.now() - new Date(visit.start_time).getTime()) / 1000)
       : 0
     const { data, error } = await supabase
       .from('daily_visits')
-      .update({ status: 'Completed', end_time: new Date().toISOString(), duration_secs: durationSecs })
+      .update({
+        status: 'Completed', end_time: new Date().toISOString(), duration_secs: durationSecs,
+        end_latitude: end_latitude ?? null, end_longitude: end_longitude ?? null, end_address: end_address ?? null,
+      })
       .eq('id', params.id).eq('tenant_id', getTenantId()).select().single()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json(data)

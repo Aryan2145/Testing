@@ -15,7 +15,8 @@
       "mcp__supabase__get_logs",
       "Bash(python3:*)",
       "Bash(node:*)",
-      "Bash(find C:\\\\Users\\\\Aryan\\\\documents\\\\rgb_software\\\\testing\\\\src\\\\app\\\\\\(protected\\):*)"
+      "Bash(find C:\\\\Users\\\\Aryan\\\\documents\\\\rgb_software\\\\testing\\\\src\\\\app\\\\\\(protected\\):*)",
+      "Bash(xargs grep:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

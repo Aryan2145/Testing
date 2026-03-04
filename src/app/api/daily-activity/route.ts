@@ -24,11 +24,14 @@ export async function POST(req: NextRequest) {
   const user = await requireUser()
   const { visit_type, entity_id, entity_name, is_new_entity, visit_date } = await req.json()
   if (!visit_type || !entity_name?.trim()) return NextResponse.json({ error: 'visit_type and entity_name are required' }, { status: 400 })
+  const today = new Date(); const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  const effectiveDate = visit_date ?? todayStr
+  if (effectiveDate > todayStr) return NextResponse.json({ error: 'Cannot create meetings for future dates' }, { status: 400 })
   const supabase = createServerSupabase()
   const { data, error } = await supabase.from('daily_visits').insert({
     tenant_id: getTenantId(),
     user_id: user.userId,
-    visit_date: visit_date ?? new Date().toISOString().split('T')[0],
+    visit_date: effectiveDate,
     visit_type,
     entity_id: entity_id || null,
     entity_name: entity_name.trim(),

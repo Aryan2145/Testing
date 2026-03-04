@@ -78,16 +78,17 @@ export async function POST(req: NextRequest) {
     if (context_type === 'meeting') {
       const { data: visit } = await supabase.from('daily_visits').select('user_id, visit_date').eq('id', context_id).single()
       if (visit && visit.user_id !== user.userId) {
+        // Manager commenting on subordinate's meeting → notify subordinate
         recipientId = visit.user_id
         redirectPath = `/daily-activity?date=${visit.visit_date}&remarks=${context_id}`
         section = 'meeting'
         message = `New remark on your meeting from ${user.name}`
       } else if (visit && visit.user_id === user.userId) {
-        // Author owns the meeting — notify manager
+        // Subordinate commenting on own meeting → notify manager, redirect to review page
         const { data: me } = await supabase.from('users').select('manager_user_id').eq('id', user.userId).single()
         if (me?.manager_user_id) {
           recipientId = me.manager_user_id
-          redirectPath = `/daily-activity?date=${visit.visit_date}&remarks=${context_id}`
+          redirectPath = `/review/${user.userId}?tab=activity&remarks=${context_id}`
           section = 'meeting'
           message = `${user.name} added a remark on their meeting`
         }
@@ -95,15 +96,17 @@ export async function POST(req: NextRequest) {
     } else if (context_type === 'expense') {
       const { data: expense } = await supabase.from('expenses').select('user_id, expense_date').eq('id', context_id).single()
       if (expense && expense.user_id !== user.userId) {
+        // Manager commenting on subordinate's expense → notify subordinate
         recipientId = expense.user_id
         redirectPath = `/daily-activity?date=${expense.expense_date}&remarks=${context_id}&tab=expenses`
         section = 'expense'
         message = `New remark on your expense from ${user.name}`
       } else if (expense && expense.user_id === user.userId) {
+        // Subordinate commenting on own expense → notify manager, redirect to review page
         const { data: me } = await supabase.from('users').select('manager_user_id').eq('id', user.userId).single()
         if (me?.manager_user_id) {
           recipientId = me.manager_user_id
-          redirectPath = `/daily-activity?date=${expense.expense_date}&remarks=${context_id}&tab=expenses`
+          redirectPath = `/review/${user.userId}?tab=expenses&remarks=${context_id}`
           section = 'expense'
           message = `${user.name} added a remark on their expense`
         }

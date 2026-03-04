@@ -26,6 +26,8 @@ export async function POST(req: NextRequest) {
   if (!expense_date || !category || !amount) {
     return NextResponse.json({ error: 'expense_date, category and amount are required' }, { status: 400 })
   }
+  const today = new Date(); const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  if (expense_date > todayStr) return NextResponse.json({ error: 'Cannot create expenses for future dates' }, { status: 400 })
   const supabase = createServerSupabase()
   const { data, error } = await supabase
     .from('expenses')

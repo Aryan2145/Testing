@@ -19,6 +19,9 @@ type Visit = {
   latitude: number | null
   longitude: number | null
   address: string | null
+  end_latitude: number | null
+  end_longitude: number | null
+  end_address: string | null
   notes: string | null
 }
 
@@ -79,7 +82,12 @@ function getWeekDates(baseDate: Date): Date[] {
   })
 }
 
-function toDateStr(d: Date) { return d.toISOString().split('T')[0] }
+function toDateStr(d: Date) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -179,6 +187,8 @@ function VisitCard({ visit, onStart, onStop, onDelete, onOrderEntry, onRemarks, 
   const [notesOpen, setNotesOpen] = useState(false)
   const [notesText, setNotesText] = useState(visit.notes ?? '')
   const [notesSaving, setNotesSaving] = useState(false)
+  const [locationOpen, setLocationOpen] = useState(false)
+  const [mapOpen, setMapOpen] = useState(false)
 
   useEffect(() => {
     if (visit.status === 'Active' && visit.start_time) {
@@ -263,7 +273,7 @@ function VisitCard({ visit, onStart, onStop, onDelete, onOrderEntry, onRemarks, 
 
         {/* Action row */}
         <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2">
-          {visit.status === 'Completed' && (
+          {(visit.status === 'Active' || visit.status === 'Completed') && (
             <button onClick={() => onOrderEntry(visit)}
               className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition">
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
@@ -279,6 +289,16 @@ function VisitCard({ visit, onStart, onStop, onDelete, onOrderEntry, onRemarks, 
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
               </svg>
               Notes{visit.notes ? ' ✓' : ''}
+            </button>
+          )}
+          {visit.latitude != null && (
+            <button onClick={() => setLocationOpen(o => !o)}
+              className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition ${locationOpen ? 'bg-teal-50 text-teal-700' : 'text-gray-500 hover:text-teal-700 hover:bg-teal-50'}`}>
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+              </svg>
+              Location
             </button>
           )}
           {visit.status === 'Pending' && (
@@ -317,6 +337,65 @@ function VisitCard({ visit, onStart, onStop, onDelete, onOrderEntry, onRemarks, 
                 className="text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg transition disabled:opacity-60">
                 {notesSaving ? 'Saving…' : 'Save Notes'}
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Location expandable section */}
+        {locationOpen && visit.latitude != null && (
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Location Details</p>
+            <div className="space-y-2">
+              <div className="bg-teal-50 rounded-lg px-3 py-2">
+                <p className="text-[10px] font-semibold text-teal-600 uppercase mb-0.5">Start Location</p>
+                <p className="text-xs text-gray-700">{visit.address ?? `${visit.latitude}, ${visit.longitude}`}</p>
+              </div>
+              {visit.end_latitude != null && (
+                <div className={`rounded-lg px-3 py-2 ${
+                  visit.latitude != null && visit.end_latitude != null &&
+                  (Math.abs(visit.latitude - visit.end_latitude) > 0.001 || Math.abs((visit.longitude ?? 0) - (visit.end_longitude ?? 0)) > 0.001)
+                    ? 'bg-red-50 border border-red-200'
+                    : 'bg-teal-50'
+                }`}>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-[10px] font-semibold text-teal-600 uppercase mb-0.5">End Location</p>
+                    {visit.latitude != null && visit.end_latitude != null &&
+                      (Math.abs(visit.latitude - visit.end_latitude) > 0.001 || Math.abs((visit.longitude ?? 0) - (visit.end_longitude ?? 0)) > 0.001) && (
+                      <span className="text-[10px] font-semibold text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full">Mismatch</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-700">{visit.end_address ?? `${visit.end_latitude}, ${visit.end_longitude}`}</p>
+                </div>
+              )}
+              {visit.status === 'Active' && !visit.end_latitude && (
+                <p className="text-xs text-gray-400 italic">End location will be captured when meeting is stopped.</p>
+              )}
+              <button
+                onClick={() => setMapOpen(o => !o)}
+                className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
+                </svg>
+                {mapOpen ? 'Hide Map' : 'View on Google Maps'}
+              </button>
+              {mapOpen && (
+                <div className="relative rounded-xl overflow-hidden border border-gray-200">
+                  <iframe
+                    src={`https://www.google.com/maps?q=${visit.latitude},${visit.longitude}&z=15&output=embed`}
+                    className="w-full h-48"
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    title="Meeting start location"
+                  />
+                  <button
+                    onClick={() => setMapOpen(false)}
+                    className="absolute top-2 right-2 bg-white/90 hover:bg-white rounded-lg p-1 shadow text-gray-500 hover:text-gray-700"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -540,7 +619,7 @@ function OrderEntryModal({ visit, onClose, onSaved }: { visit: Visit; onClose: (
     setSaving(true)
     const r = await fetch('/api/orders', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ visit_id: visit.id, order_date: visit.start_time?.split('T')[0] ?? new Date().toISOString().split('T')[0], items: validItems }),
+      body: JSON.stringify({ visit_id: visit.id, order_date: visit.start_time?.split('T')[0] ?? toDateStr(new Date()), items: validItems }),
     })
     if (!r.ok) { toast((await r.json()).error ?? 'Failed to save order', 'error') }
     else { toast('Order saved'); onSaved(); onClose() }
@@ -706,7 +785,7 @@ function PlanTab({ selectedDate }: { selectedDate: string }) {
 }
 
 // ---- Tab: Expenses ----
-function ExpensesTab({ selectedDate, onOpenRemarks }: { selectedDate: string; onOpenRemarks: (id: string) => void }) {
+function ExpensesTab({ selectedDate, onOpenRemarks, isFuture }: { selectedDate: string; onOpenRemarks: (id: string) => void; isFuture?: boolean }) {
   const { toast } = useToast()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
@@ -731,6 +810,7 @@ function ExpensesTab({ selectedDate, onOpenRemarks }: { selectedDate: string; on
   useEffect(() => { loadExpenses() }, [loadExpenses])
 
   async function handleAdd(partial: Partial<Expense>) {
+    if (isFuture) { toast('Cannot create expenses for future dates', 'error'); return }
     const r = await fetch('/api/expenses', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...partial, expense_date: selectedDate }),
@@ -798,12 +878,14 @@ function ExpensesTab({ selectedDate, onOpenRemarks }: { selectedDate: string; on
       {showAdd && <AddExpenseModal onClose={() => setShowAdd(false)} onAdd={handleAdd} />}
 
       {/* FAB */}
-      <button onClick={() => setShowAdd(true)}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200 transition z-30">
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-        </svg>
-      </button>
+      {!isFuture && (
+        <button onClick={() => setShowAdd(true)}
+          className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200 transition z-30">
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+        </button>
+      )}
     </div>
   )
 }
@@ -959,7 +1041,10 @@ function DailyActivityInner() {
     }).catch(() => {})
   }, [selectedDate])
 
+  const isFuture = selectedDate > toDateStr(new Date())
+
   async function handleAdd(partial: Partial<Visit>) {
+    if (isFuture) { toast('Cannot create meetings for future dates', 'error'); return }
     const r = await fetch('/api/daily-activity', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...partial, visit_date: selectedDate }),
@@ -1000,9 +1085,26 @@ function DailyActivityInner() {
   async function handleStop(id: string) {
     if (acting) return
     setActing(true)
+    let end_latitude: number | null = null
+    let end_longitude: number | null = null
+    let end_address: string | null = null
+    try {
+      const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000 })
+      )
+      end_latitude = pos.coords.latitude
+      end_longitude = pos.coords.longitude
+      try {
+        const geo = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${end_latitude}&lon=${end_longitude}&format=json`)
+        const geoData = await geo.json()
+        end_address = geoData.display_name ?? null
+      } catch { /* ignore */ }
+    } catch {
+      toast('Location unavailable — stopping without GPS', 'info')
+    }
     const r = await fetch(`/api/daily-activity/${id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'stop' }),
+      body: JSON.stringify({ action: 'stop', end_latitude, end_longitude, end_address }),
     })
     if (!r.ok) { toast((await r.json()).error, 'error') } else { loadVisits() }
     setActing(false)
@@ -1119,17 +1221,19 @@ function DailyActivityInner() {
           )}
 
           {/* FAB */}
-          <button onClick={() => setShowMeetingModal(true)}
-            className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200 transition z-30">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-          </button>
+          {!isFuture && (
+            <button onClick={() => setShowMeetingModal(true)}
+              className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200 transition z-30">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+            </button>
+          )}
         </div>
       )}
 
       {activeTab === 'expenses' && (
-        <ExpensesTab selectedDate={selectedDate} onOpenRemarks={handleOpenExpenseRemarks} />
+        <ExpensesTab selectedDate={selectedDate} onOpenRemarks={handleOpenExpenseRemarks} isFuture={isFuture} />
       )}
 
       {activeTab === 'summary' && (

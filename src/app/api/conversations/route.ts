@@ -62,6 +62,21 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Look up owner user_id for each context (to build correct redirects)
+  const contextIds = Object.values(groups).map(g => ({ type: g.context_type, id: g.context_id }))
+  const meetingIds = contextIds.filter(c => c.type === 'meeting').map(c => c.id)
+  const expenseIds = contextIds.filter(c => c.type === 'expense').map(c => c.id)
+
+  const ownerMap: Record<string, string> = {}
+  if (meetingIds.length > 0) {
+    const { data: visits } = await supabase.from('daily_visits').select('id, user_id').in('id', meetingIds)
+    for (const v of visits ?? []) ownerMap[v.id] = v.user_id
+  }
+  if (expenseIds.length > 0) {
+    const { data: exps } = await supabase.from('expenses').select('id, user_id').in('id', expenseIds)
+    for (const e of exps ?? []) ownerMap[e.id] = e.user_id
+  }
+
   // Get unread counts per context for current user
   const remarkIds = (remarks ?? []).map(r => r.id)
   let readSet = new Set<string>()
@@ -85,6 +100,7 @@ export async function GET(req: NextRequest) {
   let conversations = Object.values(groups).map(g => ({
     ...g,
     unread_count: unreadByContext[`${g.context_type}::${g.context_id}`] ?? 0,
+    context_user_id: ownerMap[g.context_id] ?? null,
   }))
 
   // Filter by status

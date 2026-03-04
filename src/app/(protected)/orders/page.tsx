@@ -75,7 +75,10 @@ function CreateOrderModal({
   const [selectedEntity, setSelectedEntity] = useState<{ id: string; name: string; territory?: string } | null>(null)
   const [salesExecs, setSalesExecs] = useState<TeamMember[]>([])
   const [salesUserId, setSalesUserId] = useState('')
-  const [orderDate, setOrderDate] = useState(new Date().toISOString().split('T')[0])
+  const [orderDate, setOrderDate] = useState(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  })
   const [status, setStatus] = useState<'Draft' | 'Submitted' | 'Confirmed'>('Draft')
 
   // Products
