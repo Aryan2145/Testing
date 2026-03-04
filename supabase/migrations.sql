@@ -348,6 +348,113 @@ CREATE TABLE IF NOT EXISTS weekly_plan_audit_logs (
 ALTER TABLE weekly_plan_audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- ================================================================
+-- I) EXPENSES
+-- ================================================================
+
+CREATE TABLE IF NOT EXISTS expenses (
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id    UUID NOT NULL,
+  user_id      UUID NOT NULL REFERENCES users(id),
+  expense_date DATE NOT NULL,
+  category     TEXT NOT NULL CHECK (category IN ('Travel','Food','Accommodation','Phone','Stationary','Miscellaneous')),
+  amount       NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+  notes        TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE OR REPLACE TRIGGER expenses_updated_at BEFORE UPDATE ON expenses FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
+
+-- ================================================================
+-- J) ORDERS (linked to a daily_visit / meeting)
+-- ================================================================
+
+CREATE TABLE IF NOT EXISTS orders (
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id    UUID NOT NULL,
+  user_id      UUID NOT NULL REFERENCES users(id),
+  visit_id     UUID NOT NULL REFERENCES daily_visits(id) ON DELETE CASCADE,
+  order_date   DATE NOT NULL,
+  total_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(visit_id)
+);
+CREATE OR REPLACE TRIGGER orders_updated_at BEFORE UPDATE ON orders FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
+
+-- ================================================================
+-- K) ORDER ITEMS
+-- ================================================================
+
+CREATE TABLE IF NOT EXISTS order_items (
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id    UUID NOT NULL,
+  order_id     UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  product_id   UUID REFERENCES products(id),
+  product_name TEXT NOT NULL,
+  qty          INT NOT NULL DEFAULT 1 CHECK (qty > 0),
+  rate         NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (rate >= 0),
+  amount       NUMERIC(12,2) NOT NULL DEFAULT 0,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
+
+-- ================================================================
+-- L) CONTEXTUAL REMARKS (polymorphic)
+-- ================================================================
+
+CREATE TABLE IF NOT EXISTS contextual_remarks (
+  id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id        UUID NOT NULL,
+  context_type     TEXT NOT NULL CHECK (context_type IN ('meeting','expense','weekly_plan_day')),
+  context_id       UUID NOT NULL,
+  parent_remark_id UUID REFERENCES contextual_remarks(id) ON DELETE CASCADE,
+  author_user_id   UUID NOT NULL REFERENCES users(id),
+  body             TEXT NOT NULL,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS remarks_context ON contextual_remarks(tenant_id, context_type, context_id);
+CREATE OR REPLACE TRIGGER contextual_remarks_updated_at BEFORE UPDATE ON contextual_remarks FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+ALTER TABLE contextual_remarks ENABLE ROW LEVEL SECURITY;
+
+-- ================================================================
+-- M) REMARK READS (per-user read tracking)
+-- ================================================================
+
+CREATE TABLE IF NOT EXISTS remark_reads (
+  id        UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id UUID NOT NULL,
+  remark_id UUID NOT NULL REFERENCES contextual_remarks(id) ON DELETE CASCADE,
+  user_id   UUID NOT NULL REFERENCES users(id),
+  read_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(remark_id, user_id)
+);
+ALTER TABLE remark_reads ENABLE ROW LEVEL SECURITY;
+
+-- ================================================================
+-- N) NOTIFICATIONS
+-- ================================================================
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id     UUID NOT NULL,
+  recipient_id  UUID NOT NULL REFERENCES users(id),
+  actor_id      UUID REFERENCES users(id),
+  section       TEXT NOT NULL CHECK (section IN ('weekly_plan','meeting','expense')),
+  context_type  TEXT NOT NULL,
+  context_id    UUID NOT NULL,
+  remark_id     UUID REFERENCES contextual_remarks(id) ON DELETE SET NULL,
+  redirect_path TEXT NOT NULL,
+  message       TEXT NOT NULL,
+  is_read       BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS notifications_recipient ON notifications(tenant_id, recipient_id, is_read);
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+
+-- ================================================================
 -- RLS POLICIES (Service Role bypasses RLS — anon gets nothing)
 -- ================================================================
 -- NOTE: All server-side operations use SUPABASE_SERVICE_ROLE_KEY which

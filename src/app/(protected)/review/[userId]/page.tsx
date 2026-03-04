@@ -1,0 +1,426 @@
+'use client'
+
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useRouter, useParams } from 'next/navigation'
+import StatusBadge from '@/components/ui/StatusBadge'
+import Modal from '@/components/ui/Modal'
+import { useToast } from '@/contexts/ToastContext'
+
+// ---- Helpers ----
+function getMondayOf(date: Date): Date {
+  const d = new Date(date)
+  const day = d.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  d.setDate(d.getDate() + diff)
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+function toDateStr(d: Date) { return d.toISOString().split('T')[0] }
+function addDays(d: Date, n: number) { const r = new Date(d); r.setDate(r.getDate() + n); return r }
+function formatDayHeader(dateStr: string) {
+  const d = new Date(dateStr + 'T00:00:00')
+  return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
+}
+function formatWeekRange(monday: Date) {
+  const sun = addDays(monday, 6)
+  const fmt = (d: Date) => `${d.getDate()} ${d.toLocaleDateString('en-IN', { month: 'short' })}`
+  return `${fmt(monday)} – ${fmt(sun)}`
+}
+function formatDuration(secs: number) {
+  const h = Math.floor(secs / 3600); const m = Math.floor((secs % 3600) / 60); const s = secs % 60
+  if (h > 0) return `${h}h ${m}m`
+  if (m > 0) return `${m}m ${s}s`
+  return `${s}s`
+}
+function getWeekDates(baseDate: Date): Date[] {
+  const d = getMondayOf(baseDate)
+  return Array.from({ length: 7 }, (_, i) => { const r = new Date(d); r.setDate(d.getDate() + i); return r })
+}
+
+const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+// ---- Types ----
+type Plan = {
+  id: string; status: string; submitted_at: string | null; manager_comment: string | null;
+  week_start_date: string; week_end_date: string;
+  weekly_plan_items: { plan_date: string; from_place: string; existing_dealers_goal: number; new_dealers_goal: number; notes: string }[]
+  users: { id: string; name: string; contact: string }
+}
+
+type Visit = {
+  id: string; visit_type: string; entity_name: string; is_new_entity: boolean
+  status: string; start_time: string | null; end_time: string | null; duration_secs: number | null
+}
+
+type Expense = {
+  id: string; category: string; amount: number; notes: string | null; expense_date: string
+}
+
+const CATEGORY_COLORS: Record<string, string> = {
+  Travel: 'bg-blue-100 text-blue-700', Food: 'bg-orange-100 text-orange-700',
+  Accommodation: 'bg-purple-100 text-purple-700', Phone: 'bg-teal-100 text-teal-700',
+  Stationary: 'bg-yellow-100 text-yellow-700', Miscellaneous: 'bg-gray-100 text-gray-600',
+}
+
+// ---- Week Strip (read-only variant) ----
+function WeekStrip({ selectedDate, onSelectDate, onPrevWeek, onNextWeek }: {
+  selectedDate: string; onSelectDate: (d: string) => void; onPrevWeek: () => void; onNextWeek: () => void
+}) {
+  const todayStr = toDateStr(new Date())
+  const selDate = new Date(selectedDate + 'T00:00:00')
+  const weekDates = getWeekDates(selDate)
+  return (
+    <div className="flex items-center gap-1 mb-4 bg-white rounded-2xl border border-gray-200 px-2 py-2 shadow-sm">
+      <button onClick={onPrevWeek} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition shrink-0">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+      </button>
+      <div className="flex-1 flex items-center justify-between gap-0.5">
+        {weekDates.map((d, i) => {
+          const ds = toDateStr(d); const isSelected = ds === selectedDate; const isToday = ds === todayStr
+          return (
+            <button key={ds} onClick={() => onSelectDate(ds)}
+              className={`flex flex-col items-center gap-0.5 px-1.5 py-1.5 rounded-xl flex-1 transition relative ${isSelected ? 'bg-blue-600 text-white' : 'hover:bg-gray-50 text-gray-600'}`}>
+              <span className={`text-[10px] font-semibold uppercase tracking-wide ${isSelected ? 'text-blue-100' : 'text-gray-400'}`}>{DAY_LABELS[i]}</span>
+              <span className={`text-sm font-bold ${isSelected ? 'text-white' : isToday ? 'text-blue-600' : 'text-gray-700'}`}>{d.getDate()}</span>
+              {isToday && <span className={`w-1.5 h-1.5 rounded-full absolute bottom-1 ${isSelected ? 'bg-blue-200' : 'bg-blue-500'}`} />}
+            </button>
+          )
+        })}
+      </div>
+      <button onClick={onNextWeek} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition shrink-0">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+      </button>
+    </div>
+  )
+}
+
+// ---- Weekly Plans Tab ----
+function WeeklyPlansTab({ userId }: { userId: string }) {
+  const { toast } = useToast()
+  const [plans, setPlans] = useState<Plan[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filterStatus, setFilterStatus] = useState('')
+  const [filterWeek, setFilterWeek] = useState('')
+  const [selected, setSelected] = useState<Plan | null>(null)
+  const [commentModal, setCommentModal] = useState<{ action: string; planId: string } | null>(null)
+  const [comment, setComment] = useState('')
+  const [acting, setActing] = useState(false)
+
+  const weekOptions = useMemo(() => {
+    const opts: string[] = []
+    const cur = getMondayOf(new Date())
+    for (let i = 11; i >= 0; i--) opts.push(toDateStr(addDays(cur, -7 * i)))
+    return opts
+  }, [])
+
+  const loadPlans = useCallback(async () => {
+    setLoading(true)
+    const p = new URLSearchParams({ userId })
+    if (filterStatus) p.set('status', filterStatus)
+    if (filterWeek) p.set('weekStart', filterWeek)
+    const r = await fetch(`/api/weekly-plans/review?${p}`)
+    const d = await r.json()
+    setPlans(Array.isArray(d) ? d : [])
+    setLoading(false)
+  }, [userId, filterStatus, filterWeek])
+
+  useEffect(() => { loadPlans() }, [loadPlans])
+
+  async function action(planId: string, type: string, body: Record<string, unknown> = {}) {
+    setActing(true)
+    const r = await fetch(`/api/weekly-plans/${planId}/${type}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const d = await r.json()
+    if (!r.ok) { toast(d.error, 'error') } else { toast(`Done`); loadPlans(); setSelected(null); setCommentModal(null) }
+    setActing(false)
+  }
+
+  const STATUS_OPTS = ['', 'Submitted', 'Approved', 'Rejected', 'On Hold', 'Edited by Manager', 'Resubmitted']
+
+  return (
+    <div>
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          {STATUS_OPTS.map(s => <option key={s} value={s}>{s || 'All statuses'}</option>)}
+        </select>
+        <select value={filterWeek} onChange={e => setFilterWeek(e.target.value)}
+          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">All weeks</option>
+          {weekOptions.map(w => <option key={w} value={w}>{formatWeekRange(new Date(w + 'T00:00:00'))}</option>)}
+        </select>
+      </div>
+
+      {loading ? <div className="text-center py-12 text-gray-400">Loading...</div> : plans.length === 0 ? (
+        <div className="text-center py-12 text-gray-400">No plans found.</div>
+      ) : (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-100">
+              <tr>
+                <th className="px-4 py-3 text-left font-medium text-gray-600">Week</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-600">Status</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-600">Submitted</th>
+                <th className="px-4 py-3 text-right font-medium text-gray-600">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {plans.map(p => (
+                <tr key={p.id} className="border-t border-gray-50 hover:bg-gray-50">
+                  <td className="px-4 py-3 text-xs text-gray-600">{formatWeekRange(new Date(p.week_start_date + 'T00:00:00'))}</td>
+                  <td className="px-4 py-3"><StatusBadge status={p.status} /></td>
+                  <td className="px-4 py-3 text-xs text-gray-500">{p.submitted_at ? new Date(p.submitted_at).toLocaleString('en-IN') : '—'}</td>
+                  <td className="px-4 py-3 text-right">
+                    <button onClick={() => setSelected(p)} className="text-blue-600 hover:underline text-xs font-medium">View</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Plan Detail Modal */}
+      {selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setSelected(null)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <div>
+                <h3 className="font-semibold text-gray-800">Week of {selected.week_start_date}</h3>
+                <div className="flex items-center gap-2 mt-1"><StatusBadge status={selected.status} /></div>
+              </div>
+              <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+            </div>
+            {selected.manager_comment && (
+              <div className="mx-6 mt-4 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 text-sm text-yellow-800">
+                Comment: {selected.manager_comment}
+              </div>
+            )}
+            <div className="overflow-x-auto px-6 py-4 flex-1 overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-gray-50"><tr>{['Date', 'Place', 'Dist.', 'Dealer', 'Others'].map(h => <th key={h} className="px-3 py-2 text-left font-medium text-gray-600">{h}</th>)}</tr></thead>
+                <tbody>
+                  {selected.weekly_plan_items.sort((a, b) => a.plan_date.localeCompare(b.plan_date)).map((item, i) => (
+                    <tr key={i} className="border-t border-gray-50">
+                      <td className="px-3 py-2 font-medium">{formatDayHeader(item.plan_date)}</td>
+                      <td className="px-3 py-2">{item.from_place || '—'}</td>
+                      <td className="px-3 py-2">{item.existing_dealers_goal}</td>
+                      <td className="px-3 py-2">{item.new_dealers_goal}</td>
+                      <td className="px-3 py-2">{item.notes || '0'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {['Submitted', 'Resubmitted', 'On Hold'].includes(selected.status) && (
+              <div className="px-6 py-4 border-t flex flex-wrap gap-2">
+                <button disabled={acting} onClick={() => action(selected.id, 'approve')} className="bg-green-600 hover:bg-green-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50">Approve</button>
+                <button disabled={acting} onClick={() => { setCommentModal({ action: 'reject', planId: selected.id }); setComment('') }} className="bg-red-600 hover:bg-red-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50">Reject</button>
+                <button disabled={acting} onClick={() => { setCommentModal({ action: 'hold', planId: selected.id }); setComment('') }} className="bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50">Hold</button>
+                <button disabled={acting} onClick={() => { setCommentModal({ action: 'suggest', planId: selected.id }); setComment('') }} className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50">Suggest Changes</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <Modal
+        title={commentModal?.action === 'reject' ? 'Reject' : commentModal?.action === 'hold' ? 'Put On Hold' : 'Suggest Changes'}
+        isOpen={!!commentModal} onClose={() => setCommentModal(null)}
+        onSave={() => { if (commentModal) action(commentModal.planId, commentModal.action, { comment }) }}
+        isSaving={acting} saveLabel="Confirm">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Comment {commentModal?.action === 'reject' ? '(required)' : '(optional)'}</label>
+          <textarea value={comment} onChange={e => setComment(e.target.value)} rows={3}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+        </div>
+      </Modal>
+    </div>
+  )
+}
+
+// ---- Daily Activity Tab ----
+function DailyActivityTab({ userId }: { userId: string }) {
+  const [selectedDate, setSelectedDate] = useState(toDateStr(new Date()))
+  const [weekOffset, setWeekOffset] = useState(0)
+  const [visits, setVisits] = useState<Visit[]>([])
+  const [loading, setLoading] = useState(true)
+
+  function getWeekStart(offset: number) {
+    const today = new Date()
+    const day = today.getDay()
+    const diff = day === 0 ? -6 : 1 - day
+    const monday = new Date(today)
+    monday.setDate(today.getDate() + diff + offset * 7)
+    monday.setHours(0, 0, 0, 0)
+    return monday
+  }
+
+  useEffect(() => {
+    setLoading(true)
+    fetch(`/api/review/daily-activity?userId=${userId}&date=${selectedDate}`)
+      .then(r => r.json()).then(d => { setVisits(Array.isArray(d) ? d : []); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [userId, selectedDate])
+
+  const typeColor = (t: string) => t === 'Dealer' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
+  const statusColor = (s: string) => s === 'Active' ? 'bg-amber-100 text-amber-700' : s === 'Completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'
+
+  return (
+    <div>
+      <WeekStrip
+        selectedDate={selectedDate}
+        onSelectDate={setSelectedDate}
+        onPrevWeek={() => { const o = weekOffset - 1; setWeekOffset(o); setSelectedDate(toDateStr(getWeekStart(o))) }}
+        onNextWeek={() => { const o = weekOffset + 1; setWeekOffset(o); setSelectedDate(toDateStr(getWeekStart(o))) }}
+      />
+
+      {loading ? <div className="text-center py-12 text-gray-400">Loading...</div> : visits.length === 0 ? (
+        <div className="text-center py-12 text-gray-400">No meetings on this day.</div>
+      ) : (
+        <div className="space-y-3">
+          {visits.map(v => (
+            <div key={v.id} className={`bg-white rounded-2xl border overflow-hidden ${v.status === 'Active' ? 'border-amber-300' : 'border-gray-200'}`}>
+              {v.status === 'Active' && <div className="h-1 bg-gradient-to-r from-amber-400 to-orange-400 animate-pulse" />}
+              {v.status === 'Completed' && <div className="h-1 bg-emerald-400" />}
+              <div className="px-5 py-4">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${typeColor(v.visit_type)}`}>{v.visit_type}</span>
+                  {v.is_new_entity && <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">New</span>}
+                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${statusColor(v.status)}`}>{v.status}</span>
+                </div>
+                <p className="font-semibold text-gray-900">{v.entity_name}</p>
+                <div className="flex gap-4 mt-2 text-xs text-gray-500">
+                  {v.start_time && <span>Started {new Date(v.start_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>}
+                  {v.end_time && <span>Ended {new Date(v.end_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>}
+                  {v.status === 'Completed' && v.duration_secs != null && <span className="text-emerald-600 font-medium">{formatDuration(v.duration_secs)}</span>}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---- Expenses Tab ----
+function ExpensesTab({ userId }: { userId: string }) {
+  const [selectedDate, setSelectedDate] = useState(toDateStr(new Date()))
+  const [weekOffset, setWeekOffset] = useState(0)
+  const [expenses, setExpenses] = useState<Expense[]>([])
+  const [loading, setLoading] = useState(true)
+
+  function getWeekStart(offset: number) {
+    const today = new Date()
+    const day = today.getDay()
+    const diff = day === 0 ? -6 : 1 - day
+    const monday = new Date(today)
+    monday.setDate(today.getDate() + diff + offset * 7)
+    monday.setHours(0, 0, 0, 0)
+    return monday
+  }
+
+  useEffect(() => {
+    setLoading(true)
+    fetch(`/api/review/expenses?userId=${userId}&date=${selectedDate}`)
+      .then(r => r.json()).then(d => { setExpenses(Array.isArray(d) ? d : []); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [userId, selectedDate])
+
+  const total = expenses.reduce((s, e) => s + Number(e.amount), 0)
+
+  return (
+    <div>
+      <WeekStrip
+        selectedDate={selectedDate}
+        onSelectDate={setSelectedDate}
+        onPrevWeek={() => { const o = weekOffset - 1; setWeekOffset(o); setSelectedDate(toDateStr(getWeekStart(o))) }}
+        onNextWeek={() => { const o = weekOffset + 1; setWeekOffset(o); setSelectedDate(toDateStr(getWeekStart(o))) }}
+      />
+
+      {loading ? <div className="text-center py-12 text-gray-400">Loading...</div> : expenses.length === 0 ? (
+        <div className="text-center py-12 text-gray-400">No expenses on this day.</div>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 rounded-xl text-sm">
+            <span className="text-gray-600">{expenses.length} expense{expenses.length !== 1 ? 's' : ''}</span>
+            <span className="font-semibold text-gray-800">Total: ₹{total.toFixed(0)}</span>
+          </div>
+          {expenses.map(exp => (
+            <div key={exp.id} className="bg-white rounded-2xl border border-gray-200 px-5 py-4">
+              <div className="flex items-center gap-2">
+                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${CATEGORY_COLORS[exp.category] ?? 'bg-gray-100 text-gray-600'}`}>{exp.category}</span>
+                <span className="text-base font-bold text-gray-900 ml-auto">₹{Number(exp.amount).toFixed(0)}</span>
+              </div>
+              {exp.notes && <p className="text-sm text-gray-500 mt-1.5">{exp.notes}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---- Main Page ----
+export default function ReviewUserPage() {
+  const params = useParams()
+  const router = useRouter()
+  const userId = params.userId as string
+
+  const [userName, setUserName] = useState('')
+  const [userLevel, setUserLevel] = useState('')
+  const [tab, setTab] = useState<'plans' | 'activity' | 'expenses'>('plans')
+  const [meLoaded, setMeLoaded] = useState(false)
+
+  useEffect(() => {
+    // Fetch user info from summary cards
+    fetch('/api/review/summary-cards').then(r => r.json()).then((cards: { id: string; name: string; level: string }[]) => {
+      const found = cards.find((c) => c.id === userId)
+      if (found) { setUserName(found.name); setUserLevel(found.level) }
+      setMeLoaded(true)
+    }).catch(() => setMeLoaded(true))
+  }, [userId])
+
+  const TABS = [
+    { id: 'plans', label: 'Weekly Plans' },
+    { id: 'activity', label: 'Daily Activity' },
+    { id: 'expenses', label: 'Expenses' },
+  ] as const
+
+  return (
+    <div className="max-w-2xl mx-auto pb-24">
+      {/* Back + Header */}
+      <div className="flex items-center gap-3 mb-5">
+        <button onClick={() => router.push('/review')} className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+          </svg>
+        </button>
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">{userName || 'Team Member'}</h2>
+          {userLevel && <p className="text-xs text-gray-400">{userLevel}</p>}
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex items-center gap-1 mb-5 border-b border-gray-200">
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`pb-3 px-3 text-sm font-medium border-b-2 transition ${tab === t.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {meLoaded && (
+        <>
+          {tab === 'plans' && <WeeklyPlansTab userId={userId} />}
+          {tab === 'activity' && <DailyActivityTab userId={userId} />}
+          {tab === 'expenses' && <ExpensesTab userId={userId} />}
+        </>
+      )}
+    </div>
+  )
+}
