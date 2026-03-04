@@ -8,7 +8,7 @@ export async function GET(_req: NextRequest, { params }: { params: { userId: str
 
   const [{ data: user }, { data: mapping }] = await Promise.all([
     supabase.from('users').select('id, name, contact').eq('id', params.userId).eq('tenant_id', tid).single(),
-    supabase.from('user_territory_mappings').select('state_ids, district_ids, taluka_ids, village_ids').eq('user_id', params.userId).eq('tenant_id', tid).single(),
+    supabase.from('user_territory_mappings').select('state_ids, district_ids, taluka_ids, village_ids').eq('user_id', params.userId).eq('tenant_id', tid).maybeSingle(),
   ])
 
   return NextResponse.json({
@@ -25,41 +25,19 @@ export async function PUT(req: NextRequest, { params }: { params: { userId: stri
   const supabase = createServerSupabase()
   const tid = getTenantId()
 
-  // Check if a mapping already exists for this user
-  const { data: existing } = await supabase
+  const { error } = await supabase
     .from('user_territory_mappings')
-    .select('id')
-    .eq('user_id', params.userId)
-    .eq('tenant_id', tid)
-    .maybeSingle()
-
-  let error
-  if (existing) {
-    // Update existing record
-    const res = await supabase
-      .from('user_territory_mappings')
-      .update({
-        state_ids: state_ids ?? [],
-        district_ids: district_ids ?? [],
-        taluka_ids: taluka_ids ?? [],
-        village_ids: village_ids ?? [],
-      })
-      .eq('id', existing.id)
-    error = res.error
-  } else {
-    // Insert new record
-    const res = await supabase
-      .from('user_territory_mappings')
-      .insert({
+    .upsert(
+      {
         tenant_id: tid,
         user_id: params.userId,
         state_ids: state_ids ?? [],
         district_ids: district_ids ?? [],
         taluka_ids: taluka_ids ?? [],
         village_ids: village_ids ?? [],
-      })
-    error = res.error
-  }
+      },
+      { onConflict: 'tenant_id,user_id' }
+    )
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
