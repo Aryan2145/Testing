@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import StatusBadge from '@/components/ui/StatusBadge'
-import Modal from '@/components/ui/Modal'
 import { useToast } from '@/contexts/ToastContext'
 
 // ---- helpers ----
@@ -48,80 +47,9 @@ type Plan = {
 }
 
 type LogEntry = { id: string; action_type: string; actor_role: string; timestamp: string; previous_status: string | null; new_status: string | null; comment: string | null; users?: { name: string } }
-type ReviewPlan = Plan & { users: { id: string; name: string; contact: string } }
-type CellData = { status: string | null; planned_days: number }
-type SubSummary = { id: string; name: string; weeks: Record<string, CellData> }
-type SummaryData = { weeks: string[]; subordinates: SubSummary[] }
 
 let _entryId = 0
 function newEntryId() { return `e${++_entryId}` }
-
-// ---- Summary Grid ----
-function SummaryGrid({ data, todayMondayStr }: { data: SummaryData; todayMondayStr: string }) {
-  function cellStyle(cell: CellData, weekStart: string): { cls: string; label: string } {
-    const isFuture = weekStart > todayMondayStr
-    if (!cell.status || cell.status === 'Draft') {
-      if (isFuture) return { cls: 'bg-gray-100 text-gray-400', label: '—' }
-      return { cls: 'bg-red-100 text-red-600 font-semibold', label: '—' }
-    }
-    if (cell.planned_days >= 7) return { cls: 'bg-green-100 text-green-700 font-semibold', label: '✓' }
-    return { cls: 'bg-yellow-100 text-yellow-700 font-semibold', label: `${cell.planned_days}/7` }
-  }
-
-  function weekLabel(weekStr: string) {
-    const d = new Date(weekStr + 'T00:00:00')
-    return `${d.getDate()} ${d.toLocaleDateString('en-IN', { month: 'short' })}`
-  }
-
-  return (
-    <div>
-      {/* Legend */}
-      <div className="flex flex-wrap items-center gap-4 mb-3 text-xs text-gray-600">
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-green-200 inline-block" />All planned</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-yellow-200 inline-block" />Partial (days/7)</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-200 inline-block" />Not submitted</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-gray-200 inline-block" />Future / unplanned</span>
-      </div>
-      <div className="overflow-x-auto rounded-xl border border-gray-200">
-        <table className="text-xs border-collapse">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-200">
-              <th className="text-left px-4 py-2.5 font-semibold text-gray-700 border-r border-gray-200 sticky left-0 bg-gray-50 z-10 min-w-[140px]">
-                Employee
-              </th>
-              {data.weeks.map(w => (
-                <th
-                  key={w}
-                  className={`px-2 py-2.5 text-center font-medium border-r border-gray-200 min-w-[56px] whitespace-nowrap ${w === todayMondayStr ? 'bg-blue-50 text-blue-700' : 'text-gray-500'}`}
-                >
-                  {weekLabel(w)}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {data.subordinates.map((sub, idx) => (
-              <tr key={sub.id} className={`border-b border-gray-100 ${idx % 2 !== 0 ? 'bg-gray-50/50' : 'bg-white'}`}>
-                <td className={`px-4 py-2.5 font-medium text-gray-800 border-r border-gray-200 sticky left-0 z-10 ${idx % 2 !== 0 ? 'bg-gray-50' : 'bg-white'}`}>
-                  {sub.name}
-                </td>
-                {data.weeks.map(w => {
-                  const cell = sub.weeks[w] ?? { status: null, planned_days: 0 }
-                  const { cls, label } = cellStyle(cell, w)
-                  return (
-                    <td key={w} className={`px-2 py-2.5 text-center border-r border-gray-100 ${cls}`}>
-                      {label}
-                    </td>
-                  )
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
 
 function planItemsToDayData(items: Plan['weekly_plan_items'], weekDays: string[]): DayData {
   const dd: DayData = {}
@@ -265,9 +193,10 @@ function MyPlanTab({ userId }: { userId: string | null }) {
   }
 
   function updatePlace(dateStr: string, entryId: string, field: keyof PlaceEntry, value: string | number) {
+    const clamped = (field === 'dist' || field === 'dealer' || field === 'others') ? Math.max(0, Number(value) || 0) : value
     setDayData(prev => ({
       ...prev,
-      [dateStr]: (prev[dateStr] || []).map(e => e.id === entryId ? { ...e, [field]: value } : e)
+      [dateStr]: (prev[dateStr] || []).map(e => e.id === entryId ? { ...e, [field]: clamped } : e)
     }))
   }
 
@@ -300,10 +229,49 @@ function MyPlanTab({ userId }: { userId: string | null }) {
         </button>
       </div>
 
-      {/* Manager comment */}
-      {plan?.manager_comment && (
-        <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3 text-sm text-yellow-800">
-          <strong>Manager Comment:</strong> {plan.manager_comment}
+      {/* Status banner for reviewed plans */}
+      {plan && plan.status === 'Approved' && (
+        <div className="mb-4 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-green-700">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            Plan Approved
+          </div>
+          {plan.manager_comment && <p className="text-sm text-green-600 mt-1 ml-7">{plan.manager_comment}</p>}
+        </div>
+      )}
+      {plan && plan.status === 'Rejected' && (
+        <div className="mb-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-red-700">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            Plan Rejected — Please revise and resubmit
+          </div>
+          {plan.manager_comment && <p className="text-sm text-red-600 mt-1 ml-7">{plan.manager_comment}</p>}
+        </div>
+      )}
+      {plan && plan.status === 'Edited by Manager' && (
+        <div className="mb-4 bg-purple-50 border border-purple-200 rounded-xl px-4 py-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-purple-700">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
+            Plan Edited by Manager — Review changes and resubmit
+          </div>
+          {plan.manager_comment && <p className="text-sm text-purple-600 mt-1 ml-7">{plan.manager_comment}</p>}
+        </div>
+      )}
+      {plan && plan.status === 'On Hold' && (
+        <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-yellow-700">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
+            Plan On Hold
+          </div>
+          {plan.manager_comment && <p className="text-sm text-yellow-600 mt-1 ml-7">{plan.manager_comment}</p>}
+        </div>
+      )}
+      {plan && (plan.status === 'Submitted' || plan.status === 'Resubmitted') && (
+        <div className="mb-4 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-blue-700">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            Awaiting manager review
+          </div>
         </div>
       )}
 
@@ -353,13 +321,13 @@ function MyPlanTab({ userId }: { userId: string | null }) {
                             <option value="">Select place…</option>
                             {villages.map(v => <option key={v.id} value={v.label}>{v.label}</option>)}
                           </select>
-                          <input type="number" disabled={!canEdit} value={entry.dist}
+                          <input type="number" min={0} disabled={!canEdit} value={entry.dist}
                             onChange={e => updatePlace(dateStr, entry.id, 'dist', Number(e.target.value))}
                             className="w-[72px] border border-gray-200 rounded-lg px-2 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50" />
-                          <input type="number" disabled={!canEdit} value={entry.dealer}
+                          <input type="number" min={0} disabled={!canEdit} value={entry.dealer}
                             onChange={e => updatePlace(dateStr, entry.id, 'dealer', Number(e.target.value))}
                             className="w-[72px] border border-gray-200 rounded-lg px-2 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50" />
-                          <input type="number" disabled={!canEdit} value={entry.others}
+                          <input type="number" min={0} disabled={!canEdit} value={entry.others}
                             onChange={e => updatePlace(dateStr, entry.id, 'others', Number(e.target.value))}
                             className="w-[72px] border border-gray-200 rounded-lg px-2 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50" />
                           {canEdit && (
@@ -450,231 +418,8 @@ function MyPlanTab({ userId }: { userId: string | null }) {
   )
 }
 
-// ---- Review Plans Tab ----
-function ReviewTab() {
-  const { toast } = useToast()
-  const [view, setView] = useState<'list' | 'grid'>('list')
-  const [plans, setPlans] = useState<ReviewPlan[]>([])
-  const [loading, setLoading] = useState(true)
-  const [filterStatus, setFilterStatus] = useState('')
-  const [filterEmployee, setFilterEmployee] = useState('')
-  const [filterWeek, setFilterWeek] = useState('')
-  const [selected, setSelected] = useState<ReviewPlan | null>(null)
-  const [commentModal, setCommentModal] = useState<{ action: string; planId: string } | null>(null)
-  const [comment, setComment] = useState('')
-  const [acting, setActing] = useState(false)
-  const [summary, setSummary] = useState<SummaryData | null>(null)
-  const [summaryLoading, setSummaryLoading] = useState(false)
-
-  const todayMondayStr = toDateStr(getMondayOf(new Date()))
-
-  const loadSummary = useCallback(async () => {
-    setSummaryLoading(true)
-    const r = await fetch('/api/weekly-plans/summary')
-    const d = await r.json()
-    setSummary(d?.subordinates ? d : { weeks: [], subordinates: [] })
-    setSummaryLoading(false)
-  }, [])
-
-  useEffect(() => { loadSummary() }, [loadSummary])
-
-  const loadPlans = useCallback(async () => {
-    setLoading(true)
-    const params = new URLSearchParams()
-    if (filterStatus) params.set('status', filterStatus)
-    if (filterEmployee) params.set('userId', filterEmployee)
-    if (filterWeek) params.set('weekStart', filterWeek)
-    const r = await fetch(`/api/weekly-plans/review?${params}`)
-    const d = await r.json()
-    setPlans(Array.isArray(d) ? d : [])
-    setLoading(false)
-  }, [filterStatus, filterEmployee, filterWeek])
-
-  useEffect(() => { loadPlans() }, [loadPlans])
-
-  const weekOptions = useMemo(() => {
-    const opts: string[] = []
-    const currentMonday = getMondayOf(new Date())
-    for (let i = 11; i >= 0; i--) opts.push(toDateStr(addDays(currentMonday, -7 * i)))
-    return opts
-  }, [])
-
-  async function action(planId: string, type: string, body: Record<string, unknown> = {}) {
-    setActing(true)
-    const r = await fetch(`/api/weekly-plans/${planId}/${type}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    const d = await r.json()
-    if (!r.ok) { toast(d.error, 'error') } else { toast(`Action: ${type} done`); loadPlans(); setSelected(null) }
-    setActing(false)
-  }
-
-  const STATUS_OPTS = ['', 'Submitted', 'Approved', 'Rejected', 'On Hold', 'Edited by Manager', 'Resubmitted']
-  const subordinates = summary?.subordinates ?? []
-
-  return (
-    <div>
-      {/* View toggle + filters */}
-      <div className="flex flex-wrap items-center gap-2 mb-5">
-        {/* List / Grid toggle */}
-        <div className="flex rounded-lg border border-gray-200 overflow-hidden mr-1">
-          <button
-            onClick={() => setView('list')}
-            className={`px-3 py-1.5 text-xs font-medium transition ${view === 'list' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-          >
-            List
-          </button>
-          <button
-            onClick={() => setView('grid')}
-            className={`px-3 py-1.5 text-xs font-medium transition ${view === 'grid' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-          >
-            Weekly Grid
-          </button>
-        </div>
-
-        {view === 'list' && (
-          <>
-            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-              {STATUS_OPTS.map(s => <option key={s} value={s}>{s || 'All statuses'}</option>)}
-            </select>
-
-            <select value={filterEmployee} onChange={e => setFilterEmployee(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="">All employees</option>
-              {subordinates.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-
-            <select value={filterWeek} onChange={e => setFilterWeek(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="">All weeks</option>
-              {weekOptions.map(w => <option key={w} value={w}>{formatWeekRange(new Date(w + 'T00:00:00'))}</option>)}
-            </select>
-          </>
-        )}
-      </div>
-
-      {/* Grid view */}
-      {view === 'grid' ? (
-        summaryLoading || !summary ? (
-          <div className="text-center py-12 text-gray-400">Loading weekly grid…</div>
-        ) : summary.subordinates.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">No subordinates found.</div>
-        ) : (
-          <SummaryGrid data={summary} todayMondayStr={todayMondayStr} />
-        )
-      ) : (
-        /* List view */
-        loading ? <div className="text-center py-12 text-gray-400">Loading…</div> : plans.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">No plans to review.</div>
-        ) : (
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Employee</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Week</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Status</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Submitted</th>
-                  <th className="px-4 py-3 text-right font-medium text-gray-600">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {plans.map(p => (
-                  <tr key={p.id} className="border-t border-gray-50 hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium text-gray-800">{p.users.name}</td>
-                    <td className="px-4 py-3 text-gray-600 text-xs">{p.week_start_date} — {p.week_end_date}</td>
-                    <td className="px-4 py-3"><StatusBadge status={p.status} /></td>
-                    <td className="px-4 py-3 text-xs text-gray-500">
-                      {p.submitted_at ? new Date(p.submitted_at).toLocaleString('en-IN') : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <button onClick={() => setSelected(p)} className="text-blue-600 hover:underline text-xs font-medium">View</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )
-      )}
-
-      {/* Plan Detail Modal */}
-      {selected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setSelected(null)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b">
-              <div>
-                <h3 className="font-semibold text-gray-800">{selected.users.name} — Week of {selected.week_start_date}</h3>
-                <div className="flex items-center gap-2 mt-1">
-                  <StatusBadge status={selected.status} />
-                  {selected.submitted_at && (
-                    <span className="text-xs text-gray-400">Submitted {new Date(selected.submitted_at).toLocaleString('en-IN')}</span>
-                  )}
-                </div>
-              </div>
-              <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
-            </div>
-            {selected.manager_comment && (
-              <div className="mx-6 mt-4 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 text-sm text-yellow-800">
-                Comment: {selected.manager_comment}
-              </div>
-            )}
-            <div className="overflow-x-auto px-6 py-4 flex-1 overflow-y-auto">
-              <table className="w-full text-xs">
-                <thead className="bg-gray-50">
-                  <tr>{['Date', 'Place', 'Dist.', 'Dealer', 'Others'].map(h => <th key={h} className="px-3 py-2 text-left font-medium text-gray-600">{h}</th>)}</tr>
-                </thead>
-                <tbody>
-                  {selected.weekly_plan_items.sort((a, b) => a.plan_date.localeCompare(b.plan_date)).map((item, i) => (
-                    <tr key={i} className="border-t border-gray-50">
-                      <td className="px-3 py-2 font-medium">{formatDayHeader(item.plan_date)}</td>
-                      <td className="px-3 py-2">{item.from_place || '—'}</td>
-                      <td className="px-3 py-2">{item.existing_dealers_goal}</td>
-                      <td className="px-3 py-2">{item.new_dealers_goal}</td>
-                      <td className="px-3 py-2">{item.notes || '0'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {['Submitted', 'Resubmitted', 'On Hold'].includes(selected.status) && (
-              <div className="px-6 py-4 border-t flex flex-wrap gap-2">
-                <button disabled={acting} onClick={() => { setCommentModal({ action: 'approve', planId: selected.id }); setComment('') }}
-                  className="bg-green-600 hover:bg-green-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50">Approve</button>
-                <button disabled={acting} onClick={() => { setCommentModal({ action: 'reject', planId: selected.id }); setComment('') }}
-                  className="bg-red-600 hover:bg-red-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50">Reject</button>
-                <button disabled={acting} onClick={() => { setCommentModal({ action: 'hold', planId: selected.id }); setComment('') }}
-                  className="bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50">Hold</button>
-                <button disabled={acting} onClick={() => { setCommentModal({ action: 'suggest', planId: selected.id }); setComment('') }}
-                  className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50">Suggest Changes</button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Comment Modal */}
-      <Modal
-        title={commentModal?.action === 'approve' ? 'Approve Plan' : commentModal?.action === 'reject' ? 'Reject Plan' : commentModal?.action === 'hold' ? 'Put On Hold' : 'Suggest Changes'}
-        isOpen={!!commentModal} onClose={() => setCommentModal(null)}
-        onSave={() => { if (commentModal) action(commentModal.planId, commentModal.action, { comment }) }}
-        isSaving={acting} saveLabel="Confirm">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Comment {commentModal?.action === 'reject' || commentModal?.action === 'suggest' ? '(required)' : '(optional)'}
-          </label>
-          <textarea value={comment} onChange={e => setComment(e.target.value)} rows={3}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-            placeholder={commentModal?.action === 'approve' ? 'Add an optional note for approval…' : 'Enter your comment…'} />
-        </div>
-      </Modal>
-    </div>
-  )
-}
-
 // ---- Main Page ----
 export default function WeeklyPlanPage() {
-  const [tab, setTab] = useState<'my' | 'review'>('my')
   const [me, setMe] = useState<{ userId: string | null; hasSubordinates: boolean } | null>(null)
 
   useEffect(() => {
@@ -683,18 +428,7 @@ export default function WeeklyPlanPage() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Tabs */}
-      <div className="flex items-center gap-4 mb-6 border-b border-gray-200">
-        <button onClick={() => setTab('my')} className={`pb-3 text-sm font-medium border-b-2 transition ${tab === 'my' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-          My Weekly Plans
-        </button>
-        {me?.hasSubordinates && (
-          <button onClick={() => setTab('review')} className={`pb-3 text-sm font-medium border-b-2 transition ${tab === 'review' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-            Review Plans
-          </button>
-        )}
-      </div>
-      {tab === 'my' ? <MyPlanTab userId={me?.userId ?? null} /> : <ReviewTab />}
+      <MyPlanTab userId={me?.userId ?? null} />
     </div>
   )
 }
