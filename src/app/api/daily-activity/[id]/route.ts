@@ -4,17 +4,18 @@ import { getTenantId } from '@/lib/tenant'
 import { requireUser } from '@/lib/auth'
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  await requireUser()
+  const user = await requireUser()
   const body = await req.json()
   const supabase = createServerSupabase()
   const { action, latitude, longitude, address } = body
 
   if (action === 'start') {
-    // Check no other visit is currently Active for this user today
+    // Check no other visit is currently Active for this user
     const { data: active } = await supabase
       .from('daily_visits')
       .select('id')
       .eq('tenant_id', getTenantId())
+      .eq('user_id', user.userId)
       .eq('status', 'Active')
       .neq('id', params.id)
       .limit(1)
@@ -24,7 +25,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const { data, error } = await supabase
       .from('daily_visits')
       .update({ status: 'Active', start_time: new Date().toISOString(), latitude: latitude ?? null, longitude: longitude ?? null, address: address ?? null })
-      .eq('id', params.id).eq('tenant_id', getTenantId()).select().single()
+      .eq('id', params.id).eq('tenant_id', getTenantId()).eq('user_id', user.userId).select().single()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json(data)
   }

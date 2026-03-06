@@ -464,7 +464,7 @@ function MyPlanTab({ userId }: { userId: string | null }) {
       {loading ? <div className="text-center py-12 text-gray-400">Loading...</div> : (
         <>
           {/* Day cards */}
-          <div className="flex-1 overflow-y-auto space-y-4 pb-24">
+          <div className="flex-1 overflow-y-auto space-y-4 pb-4">
             {weekDays.map(dateStr => {
               const entries = dayData[dateStr] || []
               const today = isToday(dateStr)
@@ -547,8 +547,8 @@ function MyPlanTab({ userId }: { userId: string | null }) {
             })}
           </div>
 
-          {/* Sticky footer */}
-          <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-3 flex items-center gap-3 z-40">
+          {/* Footer — stays at bottom of content area, does not overlap sidebar */}
+          <div className="border-t border-gray-200 bg-white px-6 py-3 flex items-center gap-3 -mx-6 -mb-6">
             <div className="flex-1" />
             {canEdit && (
               <>
