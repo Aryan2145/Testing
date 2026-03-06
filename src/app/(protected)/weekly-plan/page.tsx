@@ -131,7 +131,7 @@ function PlaceCombobox({ value, onChange, options, disabled }: {
         className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
       />
       {!disabled && open && (
-        <div className="absolute z-20 left-0 right-0 top-full mt-0.5 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+        <div className="absolute z-20 left-0 right-0 top-full mt-0.5 bg-white border border-gray-200 rounded-lg shadow-lg min-h-[216px] max-h-64 overflow-y-auto">
           {filtered.length === 0 ? (
             <p className="px-3 py-2 text-sm text-gray-400">No places found</p>
           ) : (
@@ -248,6 +248,14 @@ function MyPlanTab({ userId }: { userId: string | null }) {
   }
 
   async function handleSubmit() {
+    // Check for rows where place was not selected
+    const hasBlankPlace = Object.values(dayData).some(entries =>
+      entries.some(e => !e.place.trim())
+    )
+    if (hasBlankPlace) {
+      toast('Place cannot be blank — fill in all Place fields before submitting', 'error')
+      return
+    }
     const items = dayDataToPlanItems(dayData)
     // Item 4: block empty week submission
     if (items.length === 0) {
@@ -469,7 +477,7 @@ function MyPlanTab({ userId }: { userId: string | null }) {
               const entries = dayData[dateStr] || []
               const today = isToday(dateStr)
               return (
-                <div key={dateStr} className={`rounded-xl border bg-white overflow-hidden ${today ? 'border-blue-400 ring-1 ring-blue-200' : 'border-gray-200'}`}>
+                <div key={dateStr} className={`rounded-xl border bg-white ${today ? 'border-blue-400 ring-1 ring-blue-200' : 'border-gray-200'}`}>
                   {/* Day header */}
                   <div className="px-5 pt-4 pb-2">
                     <div className="flex items-center gap-2">
