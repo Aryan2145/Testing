@@ -115,7 +115,18 @@ const SECTIONS = [
 export default function MastersPage() {
   return (
     <div>
-      <h2 className="text-2xl font-bold text-gray-900">Masters</h2>
+      <div className="flex items-center justify-between mb-1">
+        <h2 className="text-2xl font-bold text-gray-900">Masters</h2>
+        <Link
+          href="/masters/import"
+          className="flex items-center gap-2 text-sm px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+          </svg>
+          Import Data
+        </Link>
+      </div>
       <p className="text-gray-500 mt-1 mb-8">Manage all master data from one place</p>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
