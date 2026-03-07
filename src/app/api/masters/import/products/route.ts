@@ -13,6 +13,16 @@ function field(row: RawRow, ...keys: string[]): string {
   return ''
 }
 
+// Case-insensitive dedup: keeps first-seen casing, discards subsequent variants
+function uniqueByLower(names: string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const n of names) {
+    if (!seen.has(n.toLowerCase())) { seen.add(n.toLowerCase()); out.push(n) }
+  }
+  return out
+}
+
 export async function POST(req: NextRequest) {
   await requireUser()
   const body = await req.json() as { rows: RawRow[] }
@@ -28,19 +38,21 @@ export async function POST(req: NextRequest) {
 
   const rows = body.rows.map((r, i) => ({
     rowNum: i + 2,
-    category: field(r, 'Category', 'CATEGORY'),
+    category:    field(r, 'Category',     'CATEGORY'),
     subcategory: field(r, 'Sub-Category', 'SUB-CATEGORY', 'Subcategory', 'subcategory'),
-    product: field(r, 'Product Name', 'PRODUCT NAME', 'Product', 'product'),
-    price: field(r, 'Price', 'PRICE'),
-    sku: field(r, 'SKU', 'sku'),
+    product:     field(r, 'Product Name', 'PRODUCT NAME', 'Product',     'product'),
+    price:       field(r, 'Price',        'PRICE'),
+    sku:         field(r, 'SKU',          'sku'),
   }))
 
   // ── 1. CATEGORIES ────────────────────────────────────────────────────────
-  const catNames = [...new Set(rows.filter(r => r.category).map(r => r.category))]
+  // Case-insensitive dedup of input names
+  const catNames = uniqueByLower(rows.filter(r => r.category).map(r => r.category))
 
+  // Fetch ALL categories for tenant → case-insensitive map
   const { data: existingCats } = await supabase
     .from('product_categories').select('id, name').eq('tenant_id', tid)
-  const catMap = new Map(existingCats?.map(c => [c.name.toLowerCase(), c.id]) ?? [])
+  const catMap = new Map<string, string>(existingCats?.map(c => [c.name.toLowerCase(), c.id]) ?? [])
 
   existing.categories = catNames.filter(n => catMap.has(n.toLowerCase())).length
   const toCreateCats = catNames.filter(n => !catMap.has(n.toLowerCase()))
@@ -55,28 +67,33 @@ export async function POST(req: NextRequest) {
   }
 
   // ── 2. SUB-CATEGORIES ────────────────────────────────────────────────────
-  const subInputs = [...new Map(
-    rows
-      .filter(r => r.category && r.subcategory)
-      .map(r => {
-        const cid = catMap.get(r.category.toLowerCase())
-        if (!cid) return null
-        return [`${cid}|${r.subcategory.toLowerCase()}`, { name: r.subcategory, categoryId: cid }] as [string, { name: string; categoryId: string }]
-      })
-      .filter((x): x is [string, { name: string; categoryId: string }] => x !== null)
-  ).values()]
-
-  rows.filter(r => r.category && r.subcategory && !catMap.has(r.category.toLowerCase()))
-    .forEach(r => skipped.push({ row: r.rowNum, reason: `Category "${r.category}" not found` }))
+  // Deduplicate inputs by compound key (categoryId|sub.lower), keep first-seen casing
+  const subInputsMap = new Map<string, { name: string; categoryId: string }>()
+  const skippedCatKeys = new Set<string>()
+  for (const r of rows) {
+    if (!r.category || !r.subcategory) continue
+    const cid = catMap.get(r.category.toLowerCase())
+    if (!cid) {
+      if (!skippedCatKeys.has(r.category.toLowerCase())) {
+        skipped.push({ row: r.rowNum, reason: `Category "${r.category}" not found` })
+        skippedCatKeys.add(r.category.toLowerCase())
+      }
+      continue
+    }
+    const key = `${cid}|${r.subcategory.toLowerCase()}`
+    if (!subInputsMap.has(key)) subInputsMap.set(key, { name: r.subcategory, categoryId: cid })
+  }
+  const subInputs = [...subInputsMap.values()]
 
   const subMap = new Map<string, string>()
   if (subInputs.length > 0) {
-    const snames = [...new Set(subInputs.map(s => s.name))]
+    // Fetch ALL subcategories for the relevant categories (avoids case-sensitive .in('name'))
+    const relevantCatIds = [...new Set(subInputs.map(s => s.categoryId))]
     const { data: ess } = await supabase.from('product_subcategories')
-      .select('id, name, category_id').eq('tenant_id', tid).in('name', snames)
+      .select('id, name, category_id').eq('tenant_id', tid).in('category_id', relevantCatIds)
     for (const s of ess ?? []) subMap.set(`${s.category_id}|${s.name.toLowerCase()}`, s.id)
-    existing.subcategories = subInputs.filter(s => subMap.has(`${s.categoryId}|${s.name.toLowerCase()}`)).length
 
+    existing.subcategories = subInputs.filter(s => subMap.has(`${s.categoryId}|${s.name.toLowerCase()}`)).length
     const toCreate = subInputs.filter(s => !subMap.has(`${s.categoryId}|${s.name.toLowerCase()}`))
     if (toCreate.length > 0) {
       const { data: ns, error } = await supabase.from('product_subcategories')
@@ -89,25 +106,30 @@ export async function POST(req: NextRequest) {
   }
 
   // ── 3. PRODUCTS ──────────────────────────────────────────────────────────
-  const prodInputs = rows
-    .filter(r => r.category && r.product)
-    .map(r => {
-      const cid = catMap.get(r.category.toLowerCase())
-      if (!cid) return null
-      const sid = r.subcategory ? subMap.get(`${cid}|${r.subcategory.toLowerCase()}`) ?? null : null
-      const price = r.price ? parseFloat(r.price) : null
-      if (r.price && isNaN(price!)) {
-        skipped.push({ row: r.rowNum, reason: `Invalid price "${r.price}"` })
-        return null
-      }
-      return { name: r.product, categoryId: cid, subcategoryId: sid, price, sku: r.sku || null }
-    })
-    .filter((x): x is { name: string; categoryId: string; subcategoryId: string | null; price: number | null; sku: string | null } => x !== null)
+  // Deduplicate by compound key (categoryId|subcategoryId|product.lower)
+  const prodInputsMap = new Map<string, { name: string; categoryId: string; subcategoryId: string | null; price: number | null; sku: string | null }>()
+  for (const r of rows) {
+    if (!r.category || !r.product) continue
+    const cid = catMap.get(r.category.toLowerCase())
+    if (!cid) continue
+    const sid = r.subcategory ? (subMap.get(`${cid}|${r.subcategory.toLowerCase()}`) ?? null) : null
+    const price = r.price ? parseFloat(r.price) : null
+    if (r.price && isNaN(price!)) {
+      skipped.push({ row: r.rowNum, reason: `Invalid price "${r.price}"` })
+      continue
+    }
+    const key = `${cid}|${sid ?? ''}|${r.product.toLowerCase()}`
+    if (!prodInputsMap.has(key)) {
+      prodInputsMap.set(key, { name: r.product, categoryId: cid, subcategoryId: sid, price, sku: r.sku || null })
+    }
+  }
+  const prodInputs = [...prodInputsMap.values()]
 
   if (prodInputs.length > 0) {
-    const pnames = [...new Set(prodInputs.map(p => p.name))]
+    // Fetch ALL products for the relevant categories (avoids case-sensitive .in('name'))
+    const relevantCatIds = [...new Set(prodInputs.map(p => p.categoryId))]
     const { data: eps } = await supabase.from('products')
-      .select('id, name, category_id, subcategory_id').eq('tenant_id', tid).in('name', pnames)
+      .select('id, name, category_id, subcategory_id').eq('tenant_id', tid).in('category_id', relevantCatIds)
     const prodMap = new Map(eps?.map(p => [
       `${p.category_id}|${p.subcategory_id ?? ''}|${p.name.toLowerCase()}`, p.id
     ]) ?? [])
@@ -115,7 +137,6 @@ export async function POST(req: NextRequest) {
     existing.products = prodInputs.filter(p =>
       prodMap.has(`${p.categoryId}|${p.subcategoryId ?? ''}|${p.name.toLowerCase()}`)
     ).length
-
     const toCreate = prodInputs.filter(p =>
       !prodMap.has(`${p.categoryId}|${p.subcategoryId ?? ''}|${p.name.toLowerCase()}`)
     )

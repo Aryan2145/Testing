@@ -13,6 +13,16 @@ function field(row: RawRow, ...keys: string[]): string {
   return ''
 }
 
+// Case-insensitive dedup: keeps first-seen casing, discards subsequent variants
+function uniqueByLower(names: string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const n of names) {
+    if (!seen.has(n.toLowerCase())) { seen.add(n.toLowerCase()); out.push(n) }
+  }
+  return out
+}
+
 export async function POST(req: NextRequest) {
   await requireUser()
   const body = await req.json() as { rows: RawRow[] }
@@ -26,21 +36,22 @@ export async function POST(req: NextRequest) {
   const created = { states: 0, districts: 0, talukas: 0, villages: 0 }
   const existing = { states: 0, districts: 0, talukas: 0, villages: 0 }
 
-  // Normalize all rows
   const rows = body.rows.map((r, i) => ({
     rowNum: i + 2,
-    state: field(r, 'State', 'STATE'),
+    state:    field(r, 'State',    'STATE'),
     district: field(r, 'District', 'DISTRICT'),
-    taluka: field(r, 'Taluka', 'TALUKA'),
-    village: field(r, 'Village', 'VILLAGE'),
+    taluka:   field(r, 'Taluka',   'TALUKA'),
+    village:  field(r, 'Village',  'VILLAGE'),
   }))
 
   // ── 1. STATES ────────────────────────────────────────────────────────────
-  const stateNames = [...new Set(rows.filter(r => r.state).map(r => r.state))]
+  // Dedup input names case-insensitively (keep first-seen casing)
+  const stateNames = uniqueByLower(rows.filter(r => r.state).map(r => r.state))
 
+  // Fetch ALL states for tenant → case-insensitive map
   const { data: existingStates } = await supabase
     .from('states').select('id, name').eq('tenant_id', tid)
-  const stateMap = new Map(existingStates?.map(s => [s.name.toLowerCase(), s.id]) ?? [])
+  const stateMap = new Map<string, string>(existingStates?.map(s => [s.name.toLowerCase(), s.id]) ?? [])
 
   existing.states = stateNames.filter(n => stateMap.has(n.toLowerCase())).length
   const toCreateStates = stateNames.filter(n => !stateMap.has(n.toLowerCase()))
@@ -55,28 +66,33 @@ export async function POST(req: NextRequest) {
   }
 
   // ── 2. DISTRICTS ─────────────────────────────────────────────────────────
-  const districtInputs = [...new Map(
-    rows
-      .filter(r => r.state && r.district)
-      .map(r => {
-        const sid = stateMap.get(r.state.toLowerCase())
-        if (!sid) return null
-        return [`${sid}|${r.district.toLowerCase()}`, { name: r.district, stateId: sid }] as [string, { name: string; stateId: string }]
-      })
-      .filter((x): x is [string, { name: string; stateId: string }] => x !== null)
-  ).values()]
-
-  rows.filter(r => r.state && r.district && !stateMap.has(r.state.toLowerCase()))
-    .forEach(r => skipped.push({ row: r.rowNum, reason: `State "${r.state}" not found` }))
+  // Deduplicate inputs by compound key (stateId|district.lower), keep first-seen casing
+  const districtInputsMap = new Map<string, { name: string; stateId: string }>()
+  const skippedStateKeys = new Set<string>()
+  for (const r of rows) {
+    if (!r.state || !r.district) continue
+    const sid = stateMap.get(r.state.toLowerCase())
+    if (!sid) {
+      if (!skippedStateKeys.has(r.state.toLowerCase())) {
+        skipped.push({ row: r.rowNum, reason: `State "${r.state}" not found` })
+        skippedStateKeys.add(r.state.toLowerCase())
+      }
+      continue
+    }
+    const key = `${sid}|${r.district.toLowerCase()}`
+    if (!districtInputsMap.has(key)) districtInputsMap.set(key, { name: r.district, stateId: sid })
+  }
+  const districtInputs = [...districtInputsMap.values()]
 
   const districtMap = new Map<string, string>()
   if (districtInputs.length > 0) {
-    const dnames = [...new Set(districtInputs.map(d => d.name))]
+    // Fetch ALL districts for the relevant states (not by name — avoids case sensitivity)
+    const relevantStateIds = [...new Set(districtInputs.map(d => d.stateId))]
     const { data: eds } = await supabase.from('districts')
-      .select('id, name, state_id').eq('tenant_id', tid).in('name', dnames)
+      .select('id, name, state_id').eq('tenant_id', tid).in('state_id', relevantStateIds)
     for (const d of eds ?? []) districtMap.set(`${d.state_id}|${d.name.toLowerCase()}`, d.id)
-    existing.districts = districtInputs.filter(d => districtMap.has(`${d.stateId}|${d.name.toLowerCase()}`)).length
 
+    existing.districts = districtInputs.filter(d => districtMap.has(`${d.stateId}|${d.name.toLowerCase()}`)).length
     const toCreate = districtInputs.filter(d => !districtMap.has(`${d.stateId}|${d.name.toLowerCase()}`))
     if (toCreate.length > 0) {
       const { data: nd, error } = await supabase.from('districts')
@@ -89,26 +105,26 @@ export async function POST(req: NextRequest) {
   }
 
   // ── 3. TALUKAS ───────────────────────────────────────────────────────────
-  const talukaInputs = [...new Map(
-    rows
-      .filter(r => r.state && r.district && r.taluka)
-      .map(r => {
-        const sid = stateMap.get(r.state.toLowerCase())
-        const did = sid ? districtMap.get(`${sid}|${r.district.toLowerCase()}`) : undefined
-        if (!did) return null
-        return [`${did}|${r.taluka.toLowerCase()}`, { name: r.taluka, districtId: did }] as [string, { name: string; districtId: string }]
-      })
-      .filter((x): x is [string, { name: string; districtId: string }] => x !== null)
-  ).values()]
+  const talukaInputsMap = new Map<string, { name: string; districtId: string }>()
+  for (const r of rows) {
+    if (!r.state || !r.district || !r.taluka) continue
+    const sid = stateMap.get(r.state.toLowerCase())
+    const did = sid ? districtMap.get(`${sid}|${r.district.toLowerCase()}`) : undefined
+    if (!did) continue
+    const key = `${did}|${r.taluka.toLowerCase()}`
+    if (!talukaInputsMap.has(key)) talukaInputsMap.set(key, { name: r.taluka, districtId: did })
+  }
+  const talukaInputs = [...talukaInputsMap.values()]
 
   const talukaMap = new Map<string, string>()
   if (talukaInputs.length > 0) {
-    const tnames = [...new Set(talukaInputs.map(t => t.name))]
+    // Fetch ALL talukas for the relevant districts
+    const relevantDistrictIds = [...new Set(talukaInputs.map(t => t.districtId))]
     const { data: ets } = await supabase.from('talukas')
-      .select('id, name, district_id').eq('tenant_id', tid).in('name', tnames)
+      .select('id, name, district_id').eq('tenant_id', tid).in('district_id', relevantDistrictIds)
     for (const t of ets ?? []) talukaMap.set(`${t.district_id}|${t.name.toLowerCase()}`, t.id)
-    existing.talukas = talukaInputs.filter(t => talukaMap.has(`${t.districtId}|${t.name.toLowerCase()}`)).length
 
+    existing.talukas = talukaInputs.filter(t => talukaMap.has(`${t.districtId}|${t.name.toLowerCase()}`)).length
     const toCreate = talukaInputs.filter(t => !talukaMap.has(`${t.districtId}|${t.name.toLowerCase()}`))
     if (toCreate.length > 0) {
       const { data: nt, error } = await supabase.from('talukas')
@@ -121,26 +137,26 @@ export async function POST(req: NextRequest) {
   }
 
   // ── 4. VILLAGES ──────────────────────────────────────────────────────────
-  const villageInputs = [...new Map(
-    rows
-      .filter(r => r.state && r.district && r.taluka && r.village)
-      .map(r => {
-        const sid = stateMap.get(r.state.toLowerCase())
-        const did = sid ? districtMap.get(`${sid}|${r.district.toLowerCase()}`) : undefined
-        const tid2 = did ? talukaMap.get(`${did}|${r.taluka.toLowerCase()}`) : undefined
-        if (!tid2) return null
-        return [`${tid2}|${r.village.toLowerCase()}`, { name: r.village, talukaId: tid2 }] as [string, { name: string; talukaId: string }]
-      })
-      .filter((x): x is [string, { name: string; talukaId: string }] => x !== null)
-  ).values()]
+  const villageInputsMap = new Map<string, { name: string; talukaId: string }>()
+  for (const r of rows) {
+    if (!r.state || !r.district || !r.taluka || !r.village) continue
+    const sid = stateMap.get(r.state.toLowerCase())
+    const did = sid ? districtMap.get(`${sid}|${r.district.toLowerCase()}`) : undefined
+    const tkid = did ? talukaMap.get(`${did}|${r.taluka.toLowerCase()}`) : undefined
+    if (!tkid) continue
+    const key = `${tkid}|${r.village.toLowerCase()}`
+    if (!villageInputsMap.has(key)) villageInputsMap.set(key, { name: r.village, talukaId: tkid })
+  }
+  const villageInputs = [...villageInputsMap.values()]
 
   if (villageInputs.length > 0) {
-    const vnames = [...new Set(villageInputs.map(v => v.name))]
+    // Fetch ALL villages for the relevant talukas
+    const relevantTalukaIds = [...new Set(villageInputs.map(v => v.talukaId))]
     const { data: evs } = await supabase.from('villages')
-      .select('id, name, taluka_id').eq('tenant_id', tid).in('name', vnames)
+      .select('id, name, taluka_id').eq('tenant_id', tid).in('taluka_id', relevantTalukaIds)
     const villageMap = new Map(evs?.map(v => [`${v.taluka_id}|${v.name.toLowerCase()}`, v.id]) ?? [])
-    existing.villages = villageInputs.filter(v => villageMap.has(`${v.talukaId}|${v.name.toLowerCase()}`)).length
 
+    existing.villages = villageInputs.filter(v => villageMap.has(`${v.talukaId}|${v.name.toLowerCase()}`)).length
     const toCreate = villageInputs.filter(v => !villageMap.has(`${v.talukaId}|${v.name.toLowerCase()}`))
     if (toCreate.length > 0) {
       const { data: nv, error } = await supabase.from('villages')

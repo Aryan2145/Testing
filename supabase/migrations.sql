@@ -97,15 +97,23 @@ ALTER TABLE villages ENABLE ROW LEVEL SECURITY;
 -- ================================================================
 
 CREATE TABLE IF NOT EXISTS distributors (
-  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id  UUID NOT NULL,
-  name       TEXT NOT NULL,
-  phone      TEXT,
-  email      TEXT,
-  address    TEXT,
-  is_active  BOOLEAN NOT NULL DEFAULT TRUE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id   UUID NOT NULL,
+  name        TEXT NOT NULL,
+  phone       TEXT,
+  email       TEXT,
+  address     TEXT,
+  state_id    UUID REFERENCES states(id)    ON DELETE SET NULL,
+  district_id UUID REFERENCES districts(id) ON DELETE SET NULL,
+  taluka_id   UUID REFERENCES talukas(id)   ON DELETE SET NULL,
+  village_id  UUID REFERENCES villages(id)  ON DELETE SET NULL,
+  latitude    NUMERIC(10,7),
+  longitude   NUMERIC(10,7),
+  is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT distributors_lat_check CHECK (latitude  IS NULL OR (latitude  >= -90  AND latitude  <= 90)),
+  CONSTRAINT distributors_lng_check CHECK (longitude IS NULL OR (longitude >= -180 AND longitude <= 180))
 );
 CREATE OR REPLACE TRIGGER distributors_updated_at BEFORE UPDATE ON distributors FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 ALTER TABLE distributors ENABLE ROW LEVEL SECURITY;
