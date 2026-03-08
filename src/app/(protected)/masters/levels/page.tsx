@@ -4,6 +4,7 @@ import { useState } from 'react'
 import CrudPage, { Column } from '@/components/ui/CrudPage'
 import Modal from '@/components/ui/Modal'
 import { useCrud } from '@/hooks/useCrud'
+import { useMe } from '@/hooks/useMe'
 
 const COLS: Column[] = [
   { key: 'level_no', label: 'Level No' },
@@ -12,6 +13,10 @@ const COLS: Column[] = [
 
 export default function LevelsPage() {
   const crud = useCrud('/api/masters/levels')
+  const me = useMe()
+  const isAdmin = me?.role === 'Administrator'
+  const canEdit = isAdmin || (me?.permissions?.organization?.edit ?? false)
+  const canDelete = isAdmin || (me?.permissions?.organization?.delete ?? false)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Record<string, unknown> | null>(null)
   const [name, setName] = useState(''); const [levelNo, setLevelNo] = useState('')
@@ -35,8 +40,10 @@ export default function LevelsPage() {
       <CrudPage title="Levels" backHref="/masters" columns={COLS} rows={crud.rows} allRowsCount={crud.allRows.length}
         isLoading={crud.isLoading} search={crud.search} onSearchChange={crud.setSearch}
         page={crud.page} totalPages={crud.totalPages} onPage={crud.setPage}
-        onAdd={openAdd} onEdit={openEdit} onToggleActive={(r, v) => crud.update(r.id as string, { is_active: v })}
-        onDelete={r => crud.remove(r.id as string)} />
+        onAdd={canEdit ? openAdd : undefined}
+        onEdit={canEdit ? openEdit : undefined}
+        onToggleActive={canEdit ? (r, v) => crud.update(r.id as string, { is_active: v }) : undefined}
+        onDelete={canDelete ? r => crud.remove(r.id as string) : undefined} />
       <Modal title={editing ? 'Edit Level' : 'Add Level'} isOpen={open} onClose={() => setOpen(false)} onSave={handleSave} isSaving={saving}>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Level No <span className="text-red-500">*</span></label>

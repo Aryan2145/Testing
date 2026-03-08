@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { getTenantId } from '@/lib/tenant'
+import { requireUser } from '@/lib/auth'
+import { checkPermission, forbidden } from '@/lib/permissions'
 
 export async function GET(req: NextRequest) {
+  const user = await requireUser()
+  if (!await checkPermission(user, 'users', 'view')) return forbidden()
   const q = req.nextUrl.searchParams.get('q') ?? ''
   const supabase = createServerSupabase()
   const tid = getTenantId()
@@ -16,6 +20,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const user = await requireUser()
+  if (!await checkPermission(user, 'users', 'edit')) return forbidden()
   const { name, email, contact, password, department_id, designation_id, level_id, profile, manager_user_id } = await req.json()
   if (!name?.trim()) return NextResponse.json({ error: 'Name is required' }, { status: 400 })
   if (!email?.trim()) return NextResponse.json({ error: 'Email is required' }, { status: 400 })

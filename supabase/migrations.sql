@@ -495,3 +495,18 @@ ON CONFLICT DO NOTHING;
 -- To enable fine-grained RLS later, add policies per table.
 -- For now: no policies = default deny for anon key.
 -- ================================================================
+
+-- ================================================================
+-- role_permissions — configurable per-section permissions for Standard role
+-- ================================================================
+CREATE TABLE IF NOT EXISTS role_permissions (
+  id          UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id   UUID    NOT NULL,
+  profile     TEXT    NOT NULL CHECK (profile IN ('Standard')),
+  section     TEXT    NOT NULL CHECK (section IN ('locations','business','products','organization','users')),
+  can_view    BOOLEAN NOT NULL DEFAULT false,
+  can_edit    BOOLEAN NOT NULL DEFAULT false,
+  can_delete  BOOLEAN NOT NULL DEFAULT false,
+  UNIQUE (tenant_id, profile, section)
+);
+ALTER TABLE role_permissions ENABLE ROW LEVEL SECURITY;

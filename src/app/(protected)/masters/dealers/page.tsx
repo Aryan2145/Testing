@@ -5,6 +5,7 @@ import CrudPage, { Column } from '@/components/ui/CrudPage'
 import Modal from '@/components/ui/Modal'
 import SearchableSelect from '@/components/ui/SearchableSelect'
 import { useCrud } from '@/hooks/useCrud'
+import { useMe } from '@/hooks/useMe'
 
 const PAGE_SIZE = 15
 
@@ -40,6 +41,10 @@ const EMPTY_DIST_FORM = { name: '', place: '', state_id: '', district_id: '', ta
 
 export default function DealersPage() {
   const crud = useCrud('/api/masters/dealers')
+  const me = useMe()
+  const isAdmin = me?.role === 'Administrator'
+  const canEdit = isAdmin || (me?.permissions?.business?.edit ?? false)
+  const canDelete = isAdmin || (me?.permissions?.business?.delete ?? false)
 
   // ── Unassigned filter ───────────────────────────────────────────────────────
   const [showUnassigned, setShowUnassigned] = useState(false)
@@ -175,9 +180,10 @@ export default function DealersPage() {
         isLoading={crud.isLoading} search={crud.search}
         onSearchChange={v => { crud.setSearch(v); setFilterPage(1) }}
         page={displayPage} totalPages={displayTotalPages} onPage={displayOnPage}
-        onAdd={openAdd} onEdit={openEdit}
-        onToggleActive={(r, v) => crud.update(r.id as string, { is_active: v })}
-        onDelete={r => crud.remove(r.id as string)}
+        onAdd={canEdit ? openAdd : undefined}
+        onEdit={canEdit ? openEdit : undefined}
+        onToggleActive={canEdit ? (r, v) => crud.update(r.id as string, { is_active: v }) : undefined}
+        onDelete={canDelete ? r => crud.remove(r.id as string) : undefined}
         filterBar={
           <div className="flex items-center gap-1.5">
             <button

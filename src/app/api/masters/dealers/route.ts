@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { getTenantId } from '@/lib/tenant'
+import { requireUser } from '@/lib/auth'
+import { checkPermission, forbidden } from '@/lib/permissions'
 
 export async function GET(req: NextRequest) {
+  const user = await requireUser()
+  if (!await checkPermission(user, 'business', 'view')) return forbidden()
   const q = req.nextUrl.searchParams.get('q') ?? ''
   const supabase = createServerSupabase()
   const tid = getTenantId()
@@ -16,6 +20,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const user = await requireUser()
+  if (!await checkPermission(user, 'business', 'edit')) return forbidden()
   const { name, state_id, district_id, taluka_id, village_id, distributor_id, phone, address, description, latitude, longitude } = await req.json()
   if (!name?.trim()) return NextResponse.json({ error: 'Name is required' }, { status: 400 })
   if (!state_id || !district_id || !taluka_id) return NextResponse.json({ error: 'State, District and Taluka are required' }, { status: 400 })

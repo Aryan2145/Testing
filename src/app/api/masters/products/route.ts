@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { getTenantId } from '@/lib/tenant'
+import { requireUser } from '@/lib/auth'
+import { checkPermission, forbidden } from '@/lib/permissions'
 
 export async function GET(req: NextRequest) {
+  const user = await requireUser()
+  if (!await checkPermission(user, 'products', 'view')) return forbidden()
   const q = req.nextUrl.searchParams.get('q') ?? ''
   const categoryId = req.nextUrl.searchParams.get('categoryId')
   const supabase = createServerSupabase()
@@ -18,13 +22,14 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const user = await requireUser()
+  if (!await checkPermission(user, 'products', 'edit')) return forbidden()
   const { name, category_id, subcategory_id, price, sku } = await req.json()
   if (!name?.trim()) return NextResponse.json({ error: 'Name is required' }, { status: 400 })
   if (!category_id) return NextResponse.json({ error: 'Category is required' }, { status: 400 })
   if (!subcategory_id) return NextResponse.json({ error: 'Subcategory is required' }, { status: 400 })
   if (price == null || isNaN(Number(price))) return NextResponse.json({ error: 'Valid price is required' }, { status: 400 })
 
-  // Validate subcategory belongs to category
   const supabase = createServerSupabase()
   const { data: sub } = await supabase
     .from('product_subcategories').select('category_id').eq('id', subcategory_id).single()

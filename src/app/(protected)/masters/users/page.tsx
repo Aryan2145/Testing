@@ -6,6 +6,7 @@ import Modal from '@/components/ui/Modal'
 import SearchableSelect from '@/components/ui/SearchableSelect'
 import StatusBadge from '@/components/ui/StatusBadge'
 import { useCrud } from '@/hooks/useCrud'
+import { useMe } from '@/hooks/useMe'
 
 type Level = { id: string; name: string; level_no: number }
 type Dept = { id: string; name: string }
@@ -26,6 +27,10 @@ const INIT = { name: '', email: '', contact: '', password: '', department_id: ''
 
 export default function UsersPage() {
   const crud = useCrud('/api/masters/users')
+  const me = useMe()
+  const isAdmin = me?.role === 'Administrator'
+  const canEdit = isAdmin || (me?.permissions?.users?.edit ?? false)
+  const canDelete = isAdmin || (me?.permissions?.users?.delete ?? false)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Record<string, unknown> | null>(null)
   const [form, setForm] = useState(INIT)
@@ -98,8 +103,10 @@ export default function UsersPage() {
       <CrudPage title="Users" backHref="/masters" columns={COLS} rows={crud.rows} allRowsCount={crud.allRows.length}
         isLoading={crud.isLoading} search={crud.search} onSearchChange={crud.setSearch}
         page={crud.page} totalPages={crud.totalPages} onPage={crud.setPage}
-        onAdd={openAdd} onEdit={openEdit} showActive={false}
-        onDelete={r => crud.remove(r.id as string)} />
+        onAdd={canEdit ? openAdd : undefined}
+        onEdit={canEdit ? openEdit : undefined}
+        showActive={false}
+        onDelete={canDelete ? r => crud.remove(r.id as string) : undefined} />
       <Modal title={editing ? 'Edit User' : 'Add User'} isOpen={open} onClose={() => setOpen(false)} onSave={handleSave} isSaving={saving} size="lg">
         {formError && (
           <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 -mt-2">

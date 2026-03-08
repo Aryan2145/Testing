@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { getTenantId } from '@/lib/tenant'
+import { requireUser } from '@/lib/auth'
+import { checkPermission, forbidden } from '@/lib/permissions'
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+  const user = await requireUser()
+  if (!await checkPermission(user, 'products', 'edit')) return forbidden()
   const body = await req.json()
   if (body.category_id && body.subcategory_id) {
     const supabase = createServerSupabase()
@@ -20,6 +24,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+  const user = await requireUser()
+  if (!await checkPermission(user, 'products', 'delete')) return forbidden()
   const supabase = createServerSupabase()
   const { error } = await supabase
     .from('products').delete().eq('id', params.id).eq('tenant_id', getTenantId())

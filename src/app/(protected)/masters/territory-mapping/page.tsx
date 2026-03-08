@@ -2,10 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useMe } from '@/hooks/useMe'
 
 type UserRow = { id: string; name: string; contact: string; district_summary: string; has_mapping: boolean }
 
 export default function TerritoryMappingPage() {
+  const me = useMe()
+  const isAdmin = me?.role === 'Administrator'
+  const canEdit = isAdmin || (me?.permissions?.locations?.edit ?? false)
   const [users, setUsers] = useState<UserRow[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -68,10 +72,19 @@ export default function TerritoryMappingPage() {
                   )}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <Link href={`/masters/territory-mapping/${user.id}`}
-                    className="text-blue-600 hover:text-blue-800 text-xs font-medium">
-                    {user.has_mapping ? 'Edit Territory' : 'Assign Territory'}
-                  </Link>
+                  {canEdit ? (
+                    <Link href={`/masters/territory-mapping/${user.id}`}
+                      className="text-blue-600 hover:text-blue-800 text-xs font-medium">
+                      {user.has_mapping ? 'Edit Territory' : 'Assign Territory'}
+                    </Link>
+                  ) : user.has_mapping ? (
+                    <Link href={`/masters/territory-mapping/${user.id}`}
+                      className="text-gray-500 hover:text-gray-700 text-xs font-medium">
+                      View Territory
+                    </Link>
+                  ) : (
+                    <span className="text-gray-300 text-xs">—</span>
+                  )}
                 </td>
               </tr>
             ))}

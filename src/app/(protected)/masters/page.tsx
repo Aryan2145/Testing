@@ -1,7 +1,11 @@
+'use client'
+
 import Link from 'next/link'
+import { useMe } from '@/hooks/useMe'
 
 const SECTIONS = [
   {
+    key: 'locations' as const,
     title: 'Locations',
     subtitle: 'Manage geographical hierarchy',
     color: 'border-blue-200 bg-blue-50/40',
@@ -37,6 +41,7 @@ const SECTIONS = [
     ],
   },
   {
+    key: 'business' as const,
     title: 'Business',
     subtitle: 'Dealers and distributors',
     color: 'border-green-200 bg-green-50/40',
@@ -59,6 +64,7 @@ const SECTIONS = [
     ],
   },
   {
+    key: 'products' as const,
     title: 'Products',
     subtitle: 'Product catalog management',
     color: 'border-purple-200 bg-purple-50/40',
@@ -85,6 +91,7 @@ const SECTIONS = [
     ],
   },
   {
+    key: 'organization' as const,
     title: 'Organization',
     subtitle: 'Company structure setup',
     color: 'border-orange-200 bg-orange-50/40',
@@ -113,26 +120,46 @@ const SECTIONS = [
 ]
 
 export default function MastersPage() {
+  const me = useMe()
+  const isAdmin = me?.role === 'Administrator'
+
+  const visibleSections = SECTIONS.filter(s =>
+    isAdmin || (me?.permissions?.[s.key]?.view ?? false)
+  )
+
+  if (me && !isAdmin && visibleSections.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <svg className="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+        </svg>
+        <p className="text-gray-500 font-medium">You don&apos;t have access to Master Data</p>
+        <p className="text-sm text-gray-400 mt-1">Contact your Administrator to request access.</p>
+      </div>
+    )
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
         <h2 className="text-2xl font-bold text-gray-900">Masters</h2>
-        <Link
-          href="/masters/import"
-          className="flex items-center gap-2 text-sm px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-          </svg>
-          Import Data
-        </Link>
+        {(isAdmin || visibleSections.some(s => me?.permissions?.[s.key]?.edit)) && (
+          <Link
+            href="/masters/import"
+            className="flex items-center gap-2 text-sm px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+            </svg>
+            Import Data
+          </Link>
+        )}
       </div>
       <p className="text-gray-500 mt-1 mb-8">Manage all master data from one place</p>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {SECTIONS.map(section => (
+        {visibleSections.map(section => (
           <div key={section.title} className={`rounded-2xl border overflow-hidden ${section.color}`}>
-            {/* Card header */}
             <div className={`px-6 py-5 ${section.headerBg} flex items-center gap-4`}>
               <div className={`w-10 h-10 rounded-xl bg-white/80 flex items-center justify-center ${section.iconColor}`}>
                 {section.icon}
@@ -142,8 +169,6 @@ export default function MastersPage() {
                 <p className="text-sm text-gray-500">{section.subtitle}</p>
               </div>
             </div>
-
-            {/* Card links */}
             <div className="px-3 py-2">
               {section.links.map(link => (
                 <Link key={link.href} href={link.href}

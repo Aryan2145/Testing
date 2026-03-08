@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
+import { invalidateMeCache } from '@/hooks/useMe'
 
 type UserEntry = { id: string; name: string; level: string }
 type VisibilityEntry = { id: string; target_user_id: string; name: string; level: string }
@@ -62,12 +63,17 @@ function AccessControlContent() {
         <TabButton active={tab === 'chart'} onClick={() => setTab('chart')}>
           Org Chart
         </TabButton>
+        <TabButton active={tab === 'permissions'} onClick={() => setTab('permissions')}>
+          Role Permissions
+        </TabButton>
       </div>
 
       {tab === 'schema' ? (
         <ReportingSchema preselectedUserId={preselected} />
-      ) : (
+      ) : tab === 'chart' ? (
         <OrgChart />
+      ) : (
+        <RolePermissions />
       )}
     </div>
   )
@@ -510,5 +516,104 @@ function LevelBadge({ level }: { level: string }) {
     <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap">
       {level}
     </span>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Role Permissions Tab
+// ─────────────────────────────────────────────────────────────────
+type SectionPerms = { view: boolean; edit: boolean; delete: boolean }
+type PermMap = Record<string, SectionPerms>
+
+const PERM_SECTIONS: { key: string; label: string }[] = [
+  { key: 'locations', label: 'Locations' },
+  { key: 'business', label: 'Business' },
+  { key: 'products', label: 'Products' },
+  { key: 'organization', label: 'Organization' },
+  { key: 'users', label: 'Users' },
+]
+
+function RolePermissions() {
+  const [perms, setPerms] = useState<PermMap>({})
+  const [saving, setSaving] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch('/api/settings/role-permissions')
+      .then(r => r.json())
+      .then((d: PermMap) => setPerms(d))
+  }, [])
+
+  async function toggle(section: string, action: 'view' | 'edit' | 'delete', value: boolean) {
+    const current = perms[section] ?? { view: false, edit: false, delete: false }
+    let next = { ...current, [action]: value }
+
+    // Cascade: enabling edit/delete → enable view
+    if ((action === 'edit' || action === 'delete') && value) next.view = true
+    // Cascade: disabling view → disable edit and delete
+    if (action === 'view' && !value) { next.edit = false; next.delete = false }
+
+    setPerms(p => ({ ...p, [section]: next }))
+    setSaving(section)
+    await fetch('/api/settings/role-permissions', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ section, can_view: next.view, can_edit: next.edit, can_delete: next.delete }),
+    })
+    setSaving(null)
+    invalidateMeCache()
+  }
+
+  return (
+    <div className="max-w-2xl">
+      <div className="mb-4">
+        <h2 className="text-sm font-semibold text-gray-800">Standard Role Permissions</h2>
+        <p className="text-xs text-gray-500 mt-0.5">Configure what Standard users can do in each section.</p>
+      </div>
+
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-b border-gray-100">
+            <tr>
+              <th className="text-left px-4 py-3 font-medium text-gray-600 w-40">Section</th>
+              <th className="text-center px-4 py-3 font-medium text-gray-600">View</th>
+              <th className="text-center px-4 py-3 font-medium text-gray-600">Edit</th>
+              <th className="text-center px-4 py-3 font-medium text-gray-600">Delete</th>
+            </tr>
+          </thead>
+          <tbody>
+            {PERM_SECTIONS.map(s => {
+              const p = perms[s.key] ?? { view: false, edit: false, delete: false }
+              return (
+                <tr key={s.key} className="border-t border-gray-50">
+                  <td className="px-4 py-3 font-medium text-gray-700">
+                    {s.label}
+                    {saving === s.key && <span className="ml-2 text-xs text-orange-500">Saving…</span>}
+                  </td>
+                  {(['view', 'edit', 'delete'] as const).map(action => (
+                    <td key={action} className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => toggle(s.key, action, !p[action])}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+                          p[action] ? 'bg-blue-600' : 'bg-gray-200'
+                        }`}
+                      >
+                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                          p[action] ? 'translate-x-4' : 'translate-x-0.5'
+                        }`} />
+                      </button>
+                    </td>
+                  ))}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-3 space-y-1">
+        <p className="text-xs text-gray-400">Administrator always has full access to all sections.</p>
+        <p className="text-xs text-gray-400">Access Control is always Administrator-only and is not configurable.</p>
+      </div>
+    </div>
   )
 }

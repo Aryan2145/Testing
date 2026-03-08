@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { getTenantId } from '@/lib/tenant'
+import { requireUser } from '@/lib/auth'
+import { checkPermission, forbidden } from '@/lib/permissions'
 
 export async function GET(req: NextRequest) {
+  const user = await requireUser()
+  if (!await checkPermission(user, 'organization', 'view')) return forbidden()
   const q = req.nextUrl.searchParams.get('q') ?? ''
   const departmentId = req.nextUrl.searchParams.get('departmentId')
   const supabase = createServerSupabase()
@@ -16,6 +20,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const user = await requireUser()
+  if (!await checkPermission(user, 'organization', 'edit')) return forbidden()
   const { name, department_id } = await req.json()
   if (!name?.trim()) return NextResponse.json({ error: 'Name is required' }, { status: 400 })
   if (!department_id) return NextResponse.json({ error: 'Department is required' }, { status: 400 })

@@ -17,7 +17,8 @@
       "Bash(node:*)",
       "Bash(find C:\\\\Users\\\\Aryan\\\\documents\\\\rgb_software\\\\testing\\\\src\\\\app\\\\\\(protected\\):*)",
       "Bash(xargs grep:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(\"C:/Users/Aryan/documents/rgb_software/testing/supabase/migrations.sql\":*)"
     ]
   },
   "enableAllProjectMcpServers": true,

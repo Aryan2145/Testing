@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { getTenantId } from '@/lib/tenant'
+import { requireUser } from '@/lib/auth'
+import { checkPermission, forbidden } from '@/lib/permissions'
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+  const user = await requireUser()
+  if (!await checkPermission(user, 'business', 'edit')) return forbidden()
   const body = await req.json()
   if (body.latitude != null && (isNaN(Number(body.latitude)) || Number(body.latitude) < -90 || Number(body.latitude) > 90))
     return NextResponse.json({ error: 'Latitude must be between -90 and 90' }, { status: 400 })
@@ -16,6 +20,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+  const user = await requireUser()
+  if (!await checkPermission(user, 'business', 'delete')) return forbidden()
   const supabase = createServerSupabase()
   const { error } = await supabase
     .from('dealers').delete().eq('id', params.id).eq('tenant_id', getTenantId())

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import CrudPage, { Column } from '@/components/ui/CrudPage'
 import Modal from '@/components/ui/Modal'
 import { useCrud } from '@/hooks/useCrud'
+import { useMe } from '@/hooks/useMe'
 
 const COLS: Column[] = [
   { key: 'name', label: 'Name' },
@@ -12,6 +13,10 @@ const COLS: Column[] = [
 
 export default function StatesPage() {
   const crud = useCrud('/api/masters/states')
+  const me = useMe()
+  const isAdmin = me?.role === 'Administrator'
+  const canEdit = isAdmin || (me?.permissions?.locations?.edit ?? false)
+  const canDelete = isAdmin || (me?.permissions?.locations?.delete ?? false)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Record<string, unknown> | null>(null)
   const [name, setName] = useState('')
@@ -40,8 +45,10 @@ export default function StatesPage() {
         title="States" backHref="/masters" columns={COLS} rows={crud.rows} allRowsCount={crud.allRows.length}
         isLoading={crud.isLoading} search={crud.search} onSearchChange={crud.setSearch}
         page={crud.page} totalPages={crud.totalPages} onPage={crud.setPage}
-        onAdd={openAdd} onEdit={openEdit} onToggleActive={handleToggle}
-        onDelete={r => crud.remove(r.id as string)}
+        onAdd={canEdit ? openAdd : undefined}
+        onEdit={canEdit ? openEdit : undefined}
+        onToggleActive={canEdit ? handleToggle : undefined}
+        onDelete={canDelete ? r => crud.remove(r.id as string) : undefined}
       />
       <Modal title={editing ? 'Edit State' : 'Add State'} isOpen={open} onClose={() => setOpen(false)} onSave={handleSave} isSaving={saving}>
         <div>

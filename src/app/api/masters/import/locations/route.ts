@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { getTenantId } from '@/lib/tenant'
 import { requireUser } from '@/lib/auth'
+import { checkPermission, forbidden } from '@/lib/permissions'
 
 type RawRow = Record<string, string | number | null | undefined>
 
@@ -24,7 +25,8 @@ function uniqueByLower(names: string[]): string[] {
 }
 
 export async function POST(req: NextRequest) {
-  await requireUser()
+  const user = await requireUser()
+  if (!await checkPermission(user, 'locations', 'edit')) return forbidden()
   const body = await req.json() as { rows: RawRow[] }
   if (!Array.isArray(body.rows)) return NextResponse.json({ error: 'rows must be an array' }, { status: 400 })
   if (body.rows.length > 2000) return NextResponse.json({ error: 'Maximum 2000 rows per import' }, { status: 400 })

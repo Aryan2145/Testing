@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { getTenantId } from '@/lib/tenant'
+import { requireUser } from '@/lib/auth'
+import { checkPermission, forbidden } from '@/lib/permissions'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  const user = await requireUser()
+  if (!await checkPermission(user, 'locations', 'view')) return forbidden()
   const supabase = createServerSupabase()
   const tid = getTenantId()
 

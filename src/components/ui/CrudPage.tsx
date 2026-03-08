@@ -22,8 +22,8 @@ interface CrudPageProps {
   page: number
   totalPages: number
   onPage: (p: number) => void
-  onAdd: () => void
-  onEdit: (row: Record<string, unknown>) => void
+  onAdd?: () => void
+  onEdit?: (row: Record<string, unknown>) => void
   onDelete?: (row: Record<string, unknown>) => void
   onToggleActive?: (row: Record<string, unknown>, val: boolean) => void
   showActive?: boolean
@@ -45,9 +45,11 @@ export default function CrudPage({
       )}
       <div className="flex items-center justify-between mb-5">
         <h2 className="text-xl font-semibold text-gray-800">{title}</h2>
-        <button onClick={onAdd} className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition">
-          {addLabel}
-        </button>
+        {onAdd && (
+          <button onClick={onAdd} className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition">
+            {addLabel}
+          </button>
+        )}
       </div>
 
       <div className="mb-3">
@@ -89,7 +91,9 @@ export default function CrudPage({
                 )}
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-3">
-                    <button onClick={() => onEdit(row)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Edit</button>
+                    {onEdit && (
+                      <button onClick={() => onEdit(row)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Edit</button>
+                    )}
                     {onDelete && (
                       <button
                         onClick={() => { if (confirm('Delete this record?')) onDelete(row) }}

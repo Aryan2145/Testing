@@ -5,6 +5,7 @@ import CrudPage, { Column } from '@/components/ui/CrudPage'
 import Modal from '@/components/ui/Modal'
 import SearchableSelect from '@/components/ui/SearchableSelect'
 import { useCrud } from '@/hooks/useCrud'
+import { useMe } from '@/hooks/useMe'
 
 const COLS: Column[] = [
   { key: 'name', label: 'Sub-Category Name' },
@@ -13,6 +14,10 @@ const COLS: Column[] = [
 
 export default function ProductSubcategoriesPage() {
   const crud = useCrud('/api/masters/product-subcategories')
+  const me = useMe()
+  const isAdmin = me?.role === 'Administrator'
+  const canEdit = isAdmin || (me?.permissions?.products?.edit ?? false)
+  const canDelete = isAdmin || (me?.permissions?.products?.delete ?? false)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Record<string, unknown> | null>(null)
   const [name, setName] = useState(''); const [catId, setCatId] = useState('')
@@ -42,8 +47,10 @@ export default function ProductSubcategoriesPage() {
       <CrudPage title="Product Sub-Categories" backHref="/masters" columns={COLS} rows={crud.rows} allRowsCount={crud.allRows.length}
         isLoading={crud.isLoading} search={crud.search} onSearchChange={crud.setSearch}
         page={crud.page} totalPages={crud.totalPages} onPage={crud.setPage}
-        onAdd={openAdd} onEdit={openEdit} onToggleActive={(r, v) => crud.update(r.id as string, { is_active: v })}
-        onDelete={r => crud.remove(r.id as string)} />
+        onAdd={canEdit ? openAdd : undefined}
+        onEdit={canEdit ? openEdit : undefined}
+        onToggleActive={canEdit ? (r, v) => crud.update(r.id as string, { is_active: v }) : undefined}
+        onDelete={canDelete ? r => crud.remove(r.id as string) : undefined} />
       <Modal title={editing ? 'Edit Sub-Category' : 'Add Sub-Category'} isOpen={open} onClose={() => setOpen(false)} onSave={handleSave} isSaving={saving}>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Category <span className="text-red-500">*</span></label>
