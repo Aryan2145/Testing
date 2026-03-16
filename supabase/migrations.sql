@@ -519,3 +519,9 @@ ALTER TABLE expenses ADD COLUMN IF NOT EXISTS photo_url TEXT;
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES ('expense-photos', 'expense-photos', true, 5242880, ARRAY['image/jpeg','image/jpg','image/png'])
 ON CONFLICT (id) DO NOTHING;
+
+-- ================================================================
+-- Password Reset Tokens
+-- ================================================================
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires TIMESTAMPTZ;
