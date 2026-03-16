@@ -237,6 +237,36 @@ export default function TerritoryCanvasPage() {
     setDistrictIds(next)
   }
 
+  function allTalukasSelected(districtId: string) {
+    const talukas = talukasByDistrict.get(districtId) ?? []
+    return talukas.length > 0 && talukas.every(t => talukaIds.has(t.id))
+  }
+  function toggleAllTalukas(districtId: string) {
+    const talukas = talukasByDistrict.get(districtId) ?? []
+    const next = new Set(talukaIds)
+    if (allTalukasSelected(districtId)) {
+      talukas.forEach(t => { next.delete(t.id); setExpandedTalukas(prev => { const s = new Set(prev); s.delete(t.id); return s }) })
+    } else {
+      talukas.forEach(t => { next.add(t.id); loadVillages(t.id) })
+    }
+    setTalukaIds(next)
+  }
+
+  function allVillagesSelected(talukaId: string) {
+    const villages = villagesByTaluka.get(talukaId) ?? []
+    return villages.length > 0 && villages.every(v => villageIds.has(v.id))
+  }
+  function toggleAllVillages(talukaId: string) {
+    const villages = villagesByTaluka.get(talukaId) ?? []
+    const next = new Set(villageIds)
+    if (allVillagesSelected(talukaId)) {
+      villages.forEach(v => next.delete(v.id))
+    } else {
+      villages.forEach(v => next.add(v.id))
+    }
+    setVillageIds(next)
+  }
+
   const totalSelected = stateIds.size + districtIds.size + talukaIds.size + villageIds.size
 
   if (loading) return <div className="text-center py-16 text-gray-400">Loading territory data…</div>
@@ -370,9 +400,13 @@ export default function TerritoryCanvasPage() {
                             {isDistSelected && isExpanded && (
                               <div className="border-t border-gray-50 bg-green-50/30">
                                 <div className="flex items-center gap-2 px-8 py-2 border-b border-gray-100">
+                                  <input type="checkbox" checked={allTalukasSelected(district.id)}
+                                    onChange={() => toggleAllTalukas(district.id)}
+                                    className="w-4 h-4 rounded accent-green-600" title="Select all talukas" />
                                   <input type="text" placeholder="Search talukas…" value={tSearch[district.id] ?? ''}
                                     onChange={e => setTSearch(p => ({ ...p, [district.id]: e.target.value }))}
                                     className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-green-500 bg-white" />
+                                  <span className="text-xs text-gray-400 shrink-0">{activeTalukas.length} sel.</span>
                                 </div>
                                 {talukas
                                   .filter(t => t.name.toLowerCase().includes((tSearch[district.id] ?? '').toLowerCase()))
@@ -411,9 +445,13 @@ export default function TerritoryCanvasPage() {
                                         {isTalSelected && isTalExpanded && (
                                           <div className="border-t border-gray-50">
                                             <div className="flex items-center gap-2 px-12 py-2 border-b border-gray-100">
+                                              <input type="checkbox" checked={allVillagesSelected(taluka.id)}
+                                                onChange={() => toggleAllVillages(taluka.id)}
+                                                className="w-3.5 h-3.5 rounded accent-purple-600" title="Select all villages" />
                                               <input type="text" placeholder="Search villages…" value={vSearch[taluka.id] ?? ''}
                                                 onChange={e => setVSearch(p => ({ ...p, [taluka.id]: e.target.value }))}
                                                 className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white" />
+                                              <span className="text-xs text-gray-400 shrink-0">{activeVillages.length} sel.</span>
                                             </div>
                                             <div className="grid grid-cols-2 gap-1 px-12 py-2">
                                               {villages
