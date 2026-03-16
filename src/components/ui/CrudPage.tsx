@@ -12,6 +12,7 @@ export interface Column {
 
 interface CrudPageProps {
   title: string
+  headerExtra?: ReactNode
   backHref?: string
   columns: Column[]
   rows: Record<string, unknown>[]
@@ -32,7 +33,7 @@ interface CrudPageProps {
 }
 
 export default function CrudPage({
-  title, backHref, columns, rows, allRowsCount, isLoading, search, onSearchChange,
+  title, headerExtra, backHref, columns, rows, allRowsCount, isLoading, search, onSearchChange,
   page, totalPages, onPage, onAdd, onEdit, onDelete, onToggleActive, showActive = true, addLabel = '+ Add', filterBar,
 }: CrudPageProps) {
   return (
@@ -44,13 +45,17 @@ export default function CrudPage({
         </a>
       )}
       <div className="flex items-center justify-between mb-5">
-        <h2 className="text-xl font-semibold text-gray-800">{title}</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl font-semibold text-gray-800">{title}</h2>
+          {headerExtra}
+        </div>
         {onAdd && (
           <button onClick={onAdd} className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition">
             {addLabel}
           </button>
         )}
       </div>
+
 
       <div className="mb-3">
         <input

@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
   ])
   if (tenant && userCount !== null && userCount >= tenant.license_count) {
     return NextResponse.json(
-      { error: `User license limit of ${tenant.license_count} reached. Please upgrade your plan.` },
+      { error: `User limit reached (${userCount}/${tenant.license_count}). Please contact My Prosys Support team to upgrade your plan.` },
       { status: 403 }
     )
   }

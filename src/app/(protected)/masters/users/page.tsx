@@ -41,13 +41,18 @@ export default function UsersPage() {
   const [depts, setDepts] = useState<Dept[]>([])
   const [allDesigs, setAllDesigs] = useState<Desig[]>([])
   const [allUsers, setAllUsers] = useState<UserRow[]>([])
+  const [license, setLicense] = useState<{ used: number; limit: number | null } | null>(null)
+  const [limitError, setLimitError] = useState(false)
 
   useEffect(() => {
     fetch('/api/masters/levels').then(r => r.json()).then(setLevels)
     fetch('/api/masters/departments').then(r => r.json()).then(setDepts)
     fetch('/api/masters/designations').then(r => r.json()).then(setAllDesigs)
     fetch('/api/masters/users').then(r => r.json()).then(setAllUsers)
+    fetch('/api/masters/users/license').then(r => r.json()).then(setLicense)
   }, [])
+
+  const atLimit = license !== null && license.limit !== null && license.used >= license.limit
 
   // Manager candidates based on selected level
   const selectedLevel = levels.find(l => l.id === form.level_id)
@@ -62,7 +67,10 @@ export default function UsersPage() {
 
   const filteredDesigs = allDesigs.filter(d => !form.department_id || d.department_id === form.department_id)
 
-  function openAdd() { setEditing(null); setForm(INIT); setFormError(''); setShowPassword(false); setOpen(true) }
+  function openAdd() {
+    if (atLimit) { setLimitError(true); return }
+    setEditing(null); setForm(INIT); setFormError(''); setShowPassword(false); setOpen(true)
+  }
   function openEdit(row: Record<string, unknown>) {
     setEditing(row)
     setFormError('')
@@ -96,19 +104,59 @@ export default function UsersPage() {
     setOpen(false)
     crud.refetch()
     fetch('/api/masters/users').then(r => r.json()).then(setAllUsers)
+    fetch('/api/masters/users/license').then(r => r.json()).then(setLicense)
   }
 
   const setF = (k: string) => (v: string) => setForm(f => ({ ...f, [k]: v }))
 
+  const licenseBadge = license?.limit != null ? (
+    <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border ${
+      atLimit ? 'bg-red-50 text-red-700 border-red-200' : 'bg-gray-100 text-gray-600 border-gray-200'
+    }`}>
+      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+      </svg>
+      {license.used} / {license.limit} Users
+    </span>
+  ) : null
+
   return (
     <>
-      <CrudPage title="Users" backHref="/masters" columns={COLS} rows={crud.rows} allRowsCount={crud.allRows.length}
+      <CrudPage title="Users" headerExtra={licenseBadge} backHref="/masters" columns={COLS} rows={crud.rows} allRowsCount={crud.allRows.length}
         isLoading={crud.isLoading} search={crud.search} onSearchChange={crud.setSearch}
         page={crud.page} totalPages={crud.totalPages} onPage={crud.setPage}
         onAdd={canEdit ? openAdd : undefined}
         onEdit={canEdit ? openEdit : undefined}
         showActive={false}
         onDelete={canDelete ? r => crud.remove(r.id as string) : undefined} />
+
+      {/* License limit error popup */}
+      {limitError && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-1">User Limit Reached</h3>
+                <p className="text-sm text-gray-600">
+                  User limit reached ({license?.used}/{license?.limit}). To add more users, please contact{' '}
+                  <span className="font-medium text-gray-900">My Prosys Support team</span> to upgrade your plan.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setLimitError(false)}
+              className="w-full bg-gray-900 text-white py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
       <Modal title={editing ? 'Edit User' : 'Add User'} isOpen={open} onClose={() => setOpen(false)} onSave={handleSave} isSaving={saving} size="lg">
         {formError && (
           <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 -mt-2">
