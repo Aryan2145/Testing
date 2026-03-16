@@ -53,5 +53,14 @@ export async function POST(req: NextRequest) {
     level_id, profile, manager_user_id: manager_user_id || null, tenant_id: tid,
   }).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Sync user_visibility: manager can see this new user in Reporting Schema
+  if (manager_user_id && data) {
+    await supabase.from('user_visibility').upsert(
+      { tenant_id: tid, viewer_user_id: manager_user_id, target_user_id: data.id },
+      { onConflict: 'tenant_id,viewer_user_id,target_user_id', ignoreDuplicates: true }
+    )
+  }
+
   return NextResponse.json(data, { status: 201 })
 }
