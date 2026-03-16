@@ -525,3 +525,28 @@ ON CONFLICT (id) DO NOTHING;
 -- ================================================================
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires TIMESTAMPTZ;
+
+-- ================================================================
+-- Institutions / Consumers
+-- ================================================================
+CREATE TABLE IF NOT EXISTS institutions (
+  id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id    UUID        NOT NULL,
+  name         TEXT        NOT NULL,
+  phone        TEXT,
+  address      TEXT,
+  description  TEXT,
+  state_id     UUID        REFERENCES states(id),
+  district_id  UUID        REFERENCES districts(id),
+  taluka_id    UUID        REFERENCES talukas(id),
+  village_id   UUID        REFERENCES villages(id),
+  latitude     NUMERIC(10,7),
+  longitude    NUMERIC(10,7),
+  is_active    BOOLEAN     NOT NULL DEFAULT true,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE institutions ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER set_institutions_updated_at
+  BEFORE UPDATE ON institutions
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
