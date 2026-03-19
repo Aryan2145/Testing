@@ -23,7 +23,11 @@
       "Bash(find C:\\\\Users\\\\Aryan\\\\documents\\\\rgb_software\\\\testing\\\\src\\\\app\\\\\\(protected\\)\\\\settings:*)",
       "Bash(grep:*)",
       "Bash(wc:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(node -e \"console.log\\(require\\(''./node_modules/next/package.json''\\).version\\)\")",
+      "Bash(npm view:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npm audit:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

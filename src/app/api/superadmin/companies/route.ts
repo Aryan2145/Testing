@@ -99,6 +99,63 @@ export async function POST(req: NextRequest) {
   const l1 = levels?.find(l => l.level_no === 1)
   if (!l1) return NextResponse.json({ error: 'Failed to create default levels' }, { status: 500 })
 
+  // Auto-provision system roles for new tenant
+  const { error: rolesError } = await supabase.from('roles').insert([
+    { tenant_id: tid, name: 'Administrator', is_system: true },
+    { tenant_id: tid, name: 'Standard', is_system: true },
+  ])
+  if (rolesError) {
+    await supabase.from('levels').delete().eq('tenant_id', tid)
+    await supabase.from('tenants').delete().eq('id', tid)
+    return NextResponse.json({ error: rolesError.message }, { status: 500 })
+  }
+
+  // Seed Standard role permissions (sensible defaults — view+create own data)
+  const SECTIONS = ['locations', 'business', 'products', 'organization', 'users', 'orders', 'leads']
+  await supabase.from('role_permissions').insert(
+    SECTIONS.map(s => ({
+      tenant_id: tid,
+      profile: 'Standard',
+      section: s,
+      can_view: true,
+      can_create: true,
+      can_edit: false,
+      can_delete: false,
+      data_scope: 'own',
+    }))
+  )
+
+  // Seed lead masters (stages, temperatures, types)
+  await Promise.all([
+    supabase.from('lead_stages').insert([
+      { tenant_id: tid, name: 'Prospect',    sort_order: 1,   is_fixed: true },
+      { tenant_id: tid, name: 'Contacted',   sort_order: 2,   is_fixed: false },
+      { tenant_id: tid, name: 'Interested',  sort_order: 3,   is_fixed: false },
+      { tenant_id: tid, name: 'Qualified',   sort_order: 4,   is_fixed: false },
+      { tenant_id: tid, name: 'Proposal',    sort_order: 5,   is_fixed: false },
+      { tenant_id: tid, name: 'Negotiation', sort_order: 6,   is_fixed: false },
+      { tenant_id: tid, name: 'Existing',    sort_order: 999, is_fixed: true },
+    ]),
+    supabase.from('lead_temperatures').insert([
+      { tenant_id: tid, name: 'Cold', sort_order: 1 },
+      { tenant_id: tid, name: 'Warm', sort_order: 2 },
+      { tenant_id: tid, name: 'Hot',  sort_order: 3 },
+    ]),
+    supabase.from('lead_types').insert([
+      { tenant_id: tid, name: 'Dealer',       sort_order: 1 },
+      { tenant_id: tid, name: 'Distributor',  sort_order: 2 },
+      { tenant_id: tid, name: 'Institution',  sort_order: 3 },
+      { tenant_id: tid, name: 'End Consumer', sort_order: 4 },
+    ]),
+    supabase.from('expense_categories').insert([
+      { tenant_id: tid, name: 'Travel',        sort_order: 1 },
+      { tenant_id: tid, name: 'Food',          sort_order: 2 },
+      { tenant_id: tid, name: 'Accommodation', sort_order: 3 },
+      { tenant_id: tid, name: 'Communication', sort_order: 4 },
+      { tenant_id: tid, name: 'Miscellaneous', sort_order: 5 },
+    ]),
+  ])
+
   // Create admin user
   const { data: adminUser, error: userError } = await supabase
     .from('users')
@@ -116,6 +173,7 @@ export async function POST(req: NextRequest) {
     .single()
   if (userError) {
     // Rollback
+    await supabase.from('roles').delete().eq('tenant_id', tid)
     await supabase.from('levels').delete().eq('tenant_id', tid)
     await supabase.from('tenants').delete().eq('id', tid)
     return NextResponse.json({ error: userError.message }, { status: 500 })

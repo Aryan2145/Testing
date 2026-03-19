@@ -3,6 +3,7 @@ import { createServerSupabase } from '@/lib/supabase-server'
 import { getTenantId } from '@/lib/tenant'
 import { requireUser } from '@/lib/auth'
 import { checkPermission, forbidden } from '@/lib/permissions'
+import { SupabaseClient } from '@supabase/supabase-js'
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   const user = await requireUser()
@@ -11,16 +12,15 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   const supabase = createServerSupabase()
   const tid = getTenantId()
 
+  // Level-based manager validation: manager must have a strictly lower level_no
   if (body.manager_user_id && body.level_id) {
     const { data: userLevel } = await supabase.from('levels').select('level_no').eq('id', body.level_id).single()
     const { data: mgr } = await supabase.from('users')
       .select('level_id, levels(level_no)').eq('id', body.manager_user_id).single()
     if (userLevel && mgr) {
       const mgrLevelNo = (mgr.levels as unknown as { level_no: number })?.level_no
-      if (userLevel.level_no === 2 && mgrLevelNo !== 1)
-        return NextResponse.json({ error: 'L2 user must have an L1 manager' }, { status: 400 })
-      if (userLevel.level_no === 3 && mgrLevelNo !== 1 && mgrLevelNo !== 2)
-        return NextResponse.json({ error: 'L3 user must have an L1 or L2 manager' }, { status: 400 })
+      if (mgrLevelNo >= userLevel.level_no)
+        return NextResponse.json({ error: 'Manager must be at a higher level than the user' }, { status: 400 })
     }
   }
 
@@ -36,18 +36,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   // Sync user_visibility when manager changes
   const newManagerId = ('manager_user_id' in body) ? (body.manager_user_id ?? null) : oldManagerId
   if (oldManagerId !== newManagerId) {
+    // Remove all old ancestor visibility for this user (cascade down was from old manager up)
     if (oldManagerId) {
-      await supabase.from('user_visibility')
-        .delete()
-        .eq('tenant_id', tid)
-        .eq('viewer_user_id', oldManagerId)
-        .eq('target_user_id', params.id)
+      await removeAncestorVisibility(supabase, tid, params.id, oldManagerId)
     }
+    // Add new cascade visibility up the new manager chain
     if (newManagerId) {
-      await supabase.from('user_visibility').upsert(
-        { tenant_id: tid, viewer_user_id: newManagerId, target_user_id: params.id },
-        { onConflict: 'tenant_id,viewer_user_id,target_user_id', ignoreDuplicates: true }
-      )
+      await cascadeVisibilityUp(supabase, tid, params.id, newManagerId)
     }
   }
 
@@ -73,4 +68,62 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     .or(`viewer_user_id.eq.${params.id},target_user_id.eq.${params.id}`)
 
   return NextResponse.json({ ok: true })
+}
+
+/** Insert visibility rows so managerId and all their managers can see userId. */
+async function cascadeVisibilityUp(
+  supabase: SupabaseClient,
+  tenantId: string,
+  userId: string,
+  managerId: string
+) {
+  const rows: { tenant_id: string; viewer_user_id: string; target_user_id: string }[] = []
+  let currentId: string | null = managerId
+  const visited = new Set<string>()
+
+  while (currentId && !visited.has(currentId)) {
+    visited.add(currentId)
+    rows.push({ tenant_id: tenantId, viewer_user_id: currentId, target_user_id: userId })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res: any = await supabase.from('users').select('manager_user_id').eq('id', currentId).single()
+    currentId = (res.data?.manager_user_id as string | null) ?? null
+  }
+
+  if (rows.length > 0) {
+    await supabase.from('user_visibility').upsert(rows, {
+      onConflict: 'tenant_id,viewer_user_id,target_user_id',
+      ignoreDuplicates: true,
+    })
+  }
+}
+
+/** Remove visibility rows from old manager chain that were auto-cascaded.
+ *  Only removes rows where the viewer is in the old manager ancestor chain
+ *  AND the visibility is not manually overridden (i.e., still part of the cascade).
+ *  Safe approach: delete all rows where target=userId and viewer is in old ancestor chain. */
+async function removeAncestorVisibility(
+  supabase: SupabaseClient,
+  tenantId: string,
+  userId: string,
+  oldManagerId: string
+) {
+  const ancestorIds: string[] = []
+  let currentId: string | null = oldManagerId
+  const visited = new Set<string>()
+
+  while (currentId && !visited.has(currentId)) {
+    visited.add(currentId)
+    ancestorIds.push(currentId)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res: any = await supabase.from('users').select('manager_user_id').eq('id', currentId).single()
+    currentId = (res.data?.manager_user_id as string | null) ?? null
+  }
+
+  if (ancestorIds.length > 0) {
+    await supabase.from('user_visibility')
+      .delete()
+      .eq('tenant_id', tenantId)
+      .eq('target_user_id', userId)
+      .in('viewer_user_id', ancestorIds)
+  }
 }

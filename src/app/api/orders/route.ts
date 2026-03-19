@@ -3,6 +3,7 @@ import { createServerSupabase } from '@/lib/supabase-server'
 import { getTenantId } from '@/lib/tenant'
 import { requireUser } from '@/lib/auth'
 import { getVisibleUserIds } from '@/lib/visibility'
+import { getDataScope } from '@/lib/permissions'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,24 +34,35 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(order ?? null)
   }
 
-  // List mode — returns orders for current user + their direct reports
+  // List mode — scope based on role's data_scope setting
   const status = req.nextUrl.searchParams.get('status')
   const dateFrom = req.nextUrl.searchParams.get('dateFrom')
   const dateTo = req.nextUrl.searchParams.get('dateTo')
   const userId = req.nextUrl.searchParams.get('userId')
   const q = req.nextUrl.searchParams.get('q')
 
-  // Determine allowed user IDs (current user + visible users)
-  const visibleIds = await getVisibleUserIds(user.userId!, supabase, tid)
-  const allowedIds = [user.userId!, ...visibleIds]
+  const scope = await getDataScope(user, 'orders')
+  let allowedIds: string[] | null = null
+  if (scope === 'own') {
+    allowedIds = [user.userId!]
+  } else if (scope === 'team') {
+    const visibleIds = await getVisibleUserIds(user.userId!, supabase, tid)
+    allowedIds = [user.userId!, ...visibleIds]
+  }
+  // scope === 'all' → no user_id filter
 
   let query = supabase
     .from('orders')
     .select('*, order_items(count), users!orders_user_id_fkey(name)')
     .eq('tenant_id', tid)
-    .in('user_id', userId ? [userId] : allowedIds)
     .order('order_date', { ascending: false })
     .order('created_at', { ascending: false })
+
+  if (userId) {
+    query = query.eq('user_id', userId)
+  } else if (allowedIds) {
+    query = query.in('user_id', allowedIds)
+  }
 
   if (status) query = query.eq('status', status)
   if (dateFrom) query = query.gte('order_date', dateFrom)
