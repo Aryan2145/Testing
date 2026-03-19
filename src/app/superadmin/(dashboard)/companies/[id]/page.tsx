@@ -41,6 +41,10 @@ export default function CompanyDetailPage({ params }: { params: { id: string } }
     id: '', name: '', email: '', contact: '', newPassword: '',
   })
   const [confirmDisable, setConfirmDisable] = useState(false)
+  const [showCreateAdmin, setShowCreateAdmin] = useState(false)
+  const [createAdminForm, setCreateAdminForm] = useState({ name: '', contact: '', email: '', password: '' })
+  const [createAdminError, setCreateAdminError] = useState('')
+  const [createAdminSaving, setCreateAdminSaving] = useState(false)
 
   async function load() {
     const res = await fetch(`/api/superadmin/companies/${id}`)
@@ -127,6 +131,29 @@ export default function CompanyDetailPage({ params }: { params: { id: string } }
     }
   }
 
+  const CAF = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setCreateAdminForm(f => ({ ...f, [k]: e.target.value }))
+
+  async function handleCreateAdmin(e: React.FormEvent) {
+    e.preventDefault()
+    if (!createAdminForm.name.trim()) { setCreateAdminError('Name is required'); return }
+    if (!/^\d{10}$/.test(createAdminForm.contact.trim())) { setCreateAdminError('Phone must be exactly 10 digits'); return }
+    if (!createAdminForm.password.trim()) { setCreateAdminError('Password is required'); return }
+    setCreateAdminError(''); setCreateAdminSaving(true)
+    const res = await fetch(`/api/superadmin/companies/${id}/admin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(createAdminForm),
+    })
+    const data = await res.json()
+    setCreateAdminSaving(false)
+    if (!res.ok) { setCreateAdminError(data.error || 'Failed to create admin'); return }
+    // Refresh company data to show the new admin
+    setShowCreateAdmin(false)
+    setCreateAdminForm({ name: '', contact: '', email: '', password: '' })
+    await load()
+  }
+
   async function confirmDisableAction() {
     setConfirmDisable(false)
     const res = await fetch(`/api/superadmin/companies/${id}`, {
@@ -169,6 +196,21 @@ export default function CompanyDetailPage({ params }: { params: { id: string } }
           </div>
         </div>
       </div>
+
+      {/* No admin warning */}
+      {!company.adminUser && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex items-center justify-between gap-4">
+          <div className="text-sm text-amber-800">
+            <span className="font-semibold">No Administrator found.</span> This company has no admin user and cannot log in.
+          </div>
+          <button
+            onClick={() => setShowCreateAdmin(true)}
+            className="shrink-0 bg-amber-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-amber-700 transition-colors"
+          >
+            Create Admin
+          </button>
+        </div>
+      )}
 
       {/* Status warning */}
       {(!company.is_active || company.payment_status === 'Suspended') && (
@@ -285,6 +327,43 @@ export default function CompanyDetailPage({ params }: { params: { id: string } }
           </button>
         </div>
       </form>
+
+      {/* Create Admin User modal */}
+      {showCreateAdmin && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full">
+            <h3 className="font-semibold text-gray-900 mb-1">Create Admin User</h3>
+            <p className="text-xs text-gray-500 mb-4">This user will be the Administrator for {company.name}</p>
+            <form onSubmit={handleCreateAdmin} className="space-y-3">
+              {createAdminError && <div className="bg-red-50 text-red-700 text-xs px-3 py-2 rounded-lg">{createAdminError}</div>}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Name <span className="text-red-500">*</span></label>
+                <input type="text" value={createAdminForm.name} onChange={CAF('name')} placeholder="Admin's full name" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Phone <span className="text-red-500">*</span></label>
+                <input type="tel" value={createAdminForm.contact} onChange={CAF('contact')} placeholder="10-digit login phone" maxLength={10} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input type="email" value={createAdminForm.email} onChange={CAF('email')} placeholder="admin@company.com" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Password <span className="text-red-500">*</span></label>
+                <input type="text" value={createAdminForm.password} onChange={CAF('password')} placeholder="Set a strong password" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              </div>
+              <div className="flex gap-3 pt-1">
+                <button type="submit" disabled={createAdminSaving} className="flex-1 bg-gray-900 text-white py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors disabled:opacity-50">
+                  {createAdminSaving ? 'Creating…' : 'Create Admin'}
+                </button>
+                <button type="button" onClick={() => { setShowCreateAdmin(false); setCreateAdminError('') }} className="flex-1 border border-gray-300 text-gray-600 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Confirm disable dialog */}
       {confirmDisable && (

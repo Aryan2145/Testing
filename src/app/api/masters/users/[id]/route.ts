@@ -52,8 +52,25 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   const u = await requireUser()
   if (!await checkPermission(u, 'users', 'delete')) return forbidden()
+
+  // Block self-deletion
+  if (u.userId === params.id)
+    return NextResponse.json({ error: 'You cannot delete your own account' }, { status: 400 })
+
   const supabase = createServerSupabase()
   const tid = getTenantId()
+
+  // Block deletion of the last Administrator
+  const { data: targetUser } = await supabase
+    .from('users').select('profile').eq('id', params.id).eq('tenant_id', tid).single()
+  if (targetUser?.profile === 'Administrator') {
+    const { count: adminCount } = await supabase
+      .from('users').select('id', { count: 'exact', head: true })
+      .eq('tenant_id', tid).eq('profile', 'Administrator')
+    if ((adminCount ?? 0) <= 1)
+      return NextResponse.json({ error: 'Cannot delete the only Administrator account' }, { status: 400 })
+  }
+
   const { count } = await supabase
     .from('users').select('id', { count: 'exact', head: true }).eq('manager_user_id', params.id)
   if ((count ?? 0) > 0) return NextResponse.json({ error: 'Cannot delete user who has subordinates' }, { status: 400 })
