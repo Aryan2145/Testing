@@ -7,7 +7,7 @@ import Header from '@/components/ui/Header'
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50">
+    <div className="flex h-dvh overflow-hidden bg-gray-50">
       {/* Mobile backdrop — closes sidebar when tapped */}
       {sidebarOpen && (
         <div

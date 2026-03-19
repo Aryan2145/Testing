@@ -143,8 +143,8 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
 
   return (
     <aside className="
-      fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 flex flex-col h-screen
-      md:static md:z-auto md:shrink-0
+      fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 flex flex-col
+      md:static md:z-auto md:shrink-0 md:h-dvh
     ">
       {/* Logo */}
       <div className="px-5 py-5">
