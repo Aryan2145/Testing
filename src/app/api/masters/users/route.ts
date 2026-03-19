@@ -3,6 +3,7 @@ import { createServerSupabase } from '@/lib/supabase-server'
 import { getTenantId } from '@/lib/tenant'
 import { requireUser } from '@/lib/auth'
 import { checkPermission, forbidden } from '@/lib/permissions'
+import { SupabaseClient } from '@supabase/supabase-js'
 
 export async function GET(req: NextRequest) {
   const user = await requireUser()
@@ -45,17 +46,15 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Level-based manager validation
+  // Level-based manager validation: manager must have a strictly lower level_no
   if (manager_user_id && level_id) {
     const { data: userLevel } = await supabase.from('levels').select('level_no').eq('id', level_id).single()
     const { data: mgr } = await supabase.from('users')
       .select('level_id, levels(level_no)').eq('id', manager_user_id).single()
     if (userLevel && mgr) {
       const mgrLevelNo = (mgr.levels as unknown as { level_no: number })?.level_no
-      if (userLevel.level_no === 2 && mgrLevelNo !== 1)
-        return NextResponse.json({ error: 'L2 user must have an L1 manager' }, { status: 400 })
-      if (userLevel.level_no === 3 && mgrLevelNo !== 1 && mgrLevelNo !== 2)
-        return NextResponse.json({ error: 'L3 user must have an L1 or L2 manager' }, { status: 400 })
+      if (mgrLevelNo >= userLevel.level_no)
+        return NextResponse.json({ error: 'Manager must be at a higher level than the user' }, { status: 400 })
     }
   }
 
@@ -66,13 +65,37 @@ export async function POST(req: NextRequest) {
   }).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Sync user_visibility: manager can see this new user in Reporting Schema
+  // Cascade visibility: new user is visible to their manager and all ancestors
   if (manager_user_id && data) {
-    await supabase.from('user_visibility').upsert(
-      { tenant_id: tid, viewer_user_id: manager_user_id, target_user_id: data.id },
-      { onConflict: 'tenant_id,viewer_user_id,target_user_id', ignoreDuplicates: true }
-    )
+    await cascadeVisibilityUp(supabase, tid, data.id, manager_user_id)
   }
 
   return NextResponse.json(data, { status: 201 })
+}
+
+/** Insert visibility rows so managerId and all their managers can see userId. */
+async function cascadeVisibilityUp(
+  supabase: SupabaseClient,
+  tenantId: string,
+  userId: string,
+  managerId: string
+) {
+  const rows: { tenant_id: string; viewer_user_id: string; target_user_id: string }[] = []
+  let currentId: string | null = managerId
+  const visited = new Set<string>()
+
+  while (currentId && !visited.has(currentId)) {
+    visited.add(currentId)
+    rows.push({ tenant_id: tenantId, viewer_user_id: currentId, target_user_id: userId })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res: any = await supabase.from('users').select('manager_user_id').eq('id', currentId).single()
+    currentId = (res.data?.manager_user_id as string | null) ?? null
+  }
+
+  if (rows.length > 0) {
+    await supabase.from('user_visibility').upsert(rows, {
+      onConflict: 'tenant_id,viewer_user_id,target_user_id',
+      ignoreDuplicates: true,
+    })
+  }
 }

@@ -4,7 +4,7 @@ import { getTenantId } from './tenant'
 import { SessionUser } from './auth'
 
 export type PermSection = 'locations' | 'business' | 'products' | 'organization' | 'users'
-export type PermAction = 'view' | 'edit' | 'delete'
+export type PermAction = 'view' | 'create' | 'edit' | 'delete'
 
 export async function checkPermission(
   user: SessionUser,
@@ -16,13 +16,18 @@ export async function checkPermission(
   const tid = getTenantId()
   const { data } = await supabase
     .from('role_permissions')
-    .select('can_view,can_edit,can_delete')
+    .select('can_view,can_create,can_edit,can_delete')
     .eq('tenant_id', tid)
     .eq('profile', user.role)
     .eq('section', section)
     .maybeSingle()
   if (!data) return false
-  return action === 'view' ? data.can_view : action === 'edit' ? data.can_edit : data.can_delete
+  switch (action) {
+    case 'view':   return data.can_view
+    case 'create': return data.can_create ?? data.can_edit  // fallback: create = edit for legacy rows
+    case 'edit':   return data.can_edit
+    case 'delete': return data.can_delete
+  }
 }
 
 export function forbidden() {

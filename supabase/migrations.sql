@@ -663,3 +663,32 @@ INSERT INTO lead_temperatures (tenant_id, name, sort_order) VALUES
   ('00000000-0000-0000-0000-000000000001','Cold',1),('00000000-0000-0000-0000-000000000001','Warm',2),
   ('00000000-0000-0000-0000-000000000001','Hot',3)
 ON CONFLICT DO NOTHING;
+
+-- ================================================================
+-- access_control_redesign
+-- Custom roles, can_create permission, transitive visibility cascade
+-- ================================================================
+
+CREATE TABLE IF NOT EXISTS roles (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id  UUID NOT NULL,
+  name       TEXT NOT NULL,
+  is_system  BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(tenant_id, name)
+);
+ALTER TABLE roles ENABLE ROW LEVEL SECURITY;
+
+INSERT INTO roles (tenant_id, name, is_system)
+SELECT DISTINCT tenant_id, 'Administrator', true FROM users ON CONFLICT (tenant_id, name) DO NOTHING;
+INSERT INTO roles (tenant_id, name, is_system)
+SELECT DISTINCT tenant_id, 'Standard', true FROM users ON CONFLICT (tenant_id, name) DO NOTHING;
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS role_id UUID REFERENCES roles(id);
+UPDATE users u SET role_id = r.id FROM roles r WHERE r.tenant_id = u.tenant_id AND r.name = u.profile AND u.role_id IS NULL;
+
+ALTER TABLE role_permissions ADD COLUMN IF NOT EXISTS can_create BOOLEAN NOT NULL DEFAULT false;
+UPDATE role_permissions SET can_create = can_edit WHERE can_create = false AND can_edit = true;
+
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_profile_check;
+ALTER TABLE role_permissions DROP CONSTRAINT IF EXISTS role_permissions_profile_check;
