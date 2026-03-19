@@ -19,12 +19,13 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 404 })
 
-  const [{ count: totalUsers }, { count: activeUsers }] = await Promise.all([
+  const [{ count: totalUsers }, { count: activeUsers }, { data: adminUser }] = await Promise.all([
     supabase.from('users').select('*', { count: 'exact', head: true }).eq('tenant_id', params.id),
     supabase.from('users').select('*', { count: 'exact', head: true }).eq('tenant_id', params.id).eq('status', 'Active'),
+    supabase.from('users').select('id,name,email,contact').eq('tenant_id', params.id).eq('profile', 'Administrator').order('created_at', { ascending: true }).limit(1).maybeSingle(),
   ])
 
-  return NextResponse.json({ ...tenant, total_users: totalUsers ?? 0, active_users: activeUsers ?? 0 })
+  return NextResponse.json({ ...tenant, total_users: totalUsers ?? 0, active_users: activeUsers ?? 0, adminUser: adminUser ?? null })
 }
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
@@ -46,5 +47,19 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     .select()
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Update admin user if payload provided
+  if (body.adminUser?.id) {
+    const { id: adminId, name: adminName, email: adminEmail, contact: adminContact, password: adminPassword } = body.adminUser
+    const userUpdate: Record<string, unknown> = {}
+    if (adminName !== undefined) userUpdate.name = adminName.trim()
+    if (adminEmail !== undefined) userUpdate.email = adminEmail.trim() || null
+    if (adminContact !== undefined && adminContact.trim()) userUpdate.contact = adminContact.trim()
+    if (adminPassword !== undefined && adminPassword.trim()) userUpdate.password = adminPassword.trim()
+    if (Object.keys(userUpdate).length > 0) {
+      await supabase.from('users').update(userUpdate).eq('id', adminId)
+    }
+  }
+
   return NextResponse.json(data)
 }

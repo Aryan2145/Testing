@@ -16,6 +16,7 @@ type Company = {
   is_active: boolean
   total_users: number
   active_users: number
+  adminUser: { id: string; name: string; email: string | null; contact: string } | null
 }
 
 const STATUS_STYLES = {
@@ -36,6 +37,9 @@ export default function CompanyDetailPage({ params }: { params: { id: string } }
     name: '', email: '', phone: '', address: '', gstin: '',
     license_count: '', payment_status: 'Active', payment_due_date: '',
   })
+  const [adminForm, setAdminForm] = useState({
+    id: '', name: '', email: '', contact: '', newPassword: '',
+  })
   const [confirmDisable, setConfirmDisable] = useState(false)
 
   async function load() {
@@ -53,6 +57,15 @@ export default function CompanyDetailPage({ params }: { params: { id: string } }
       payment_status: data.payment_status,
       payment_due_date: data.payment_due_date ?? '',
     })
+    if (data.adminUser) {
+      setAdminForm({
+        id: data.adminUser.id,
+        name: data.adminUser.name,
+        email: data.adminUser.email ?? '',
+        contact: data.adminUser.contact,
+        newPassword: '',
+      })
+    }
     setLoading(false)
   }
 
@@ -60,6 +73,8 @@ export default function CompanyDetailPage({ params }: { params: { id: string } }
 
   const F = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
+  const AF = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setAdminForm(f => ({ ...f, [k]: e.target.value }))
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
@@ -77,12 +92,22 @@ export default function CompanyDetailPage({ params }: { params: { id: string } }
         license_count: Number(form.license_count),
         payment_status: form.payment_status,
         payment_due_date: form.payment_due_date || null,
+        ...(adminForm.id ? {
+          adminUser: {
+            id: adminForm.id,
+            name: adminForm.name,
+            email: adminForm.email,
+            contact: adminForm.contact,
+            password: adminForm.newPassword || undefined,
+          }
+        } : {}),
       }),
     })
     const data = await res.json()
     setSaving(false)
     if (!res.ok) { setError(data.error || 'Save failed'); return }
     setCompany(prev => prev ? { ...prev, ...data } : null)
+    setAdminForm(f => ({ ...f, newPassword: '' }))
     setSuccess('Changes saved successfully')
     setTimeout(() => setSuccess(''), 3000)
   }
@@ -218,6 +243,34 @@ export default function CompanyDetailPage({ params }: { params: { id: string } }
             <input type="date" value={form.payment_due_date} onChange={F('payment_due_date')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
           </div>
         </div>
+
+        {/* Admin User section */}
+        {adminForm.id && (
+          <div className="border-t border-gray-100 pt-4 space-y-4">
+            <div>
+              <h2 className="font-medium text-gray-900">Admin User</h2>
+              <p className="text-xs text-gray-500 mt-0.5">Administrator account for this company</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+              <input type="text" value={adminForm.name} onChange={AF('name')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Phone (Login)</label>
+                <input type="tel" value={adminForm.contact} onChange={AF('contact')} maxLength={10} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input type="email" value={adminForm.email} onChange={AF('email')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">New Password <span className="text-gray-400 font-normal">(leave blank to keep current)</span></label>
+              <input type="text" value={adminForm.newPassword} onChange={AF('newPassword')} placeholder="Enter new password to change" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center gap-3 pt-1">
           <button type="submit" disabled={saving} className="bg-gray-900 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors disabled:opacity-50">
