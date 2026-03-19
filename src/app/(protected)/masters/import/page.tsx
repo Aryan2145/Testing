@@ -69,47 +69,40 @@ export default function MastersImportPage() {
 
   // ── Template download ─────────────────────────────────────────────────────
   const downloadTemplate = async () => {
-    const XLSX = await import('xlsx')
-    const wb = XLSX.utils.book_new()
+    const ExcelJS = (await import('exceljs')).default
+    const wb = new ExcelJS.Workbook()
 
-    const locWs = XLSX.utils.aoa_to_sheet([
-      ['State', 'District', 'Taluka', 'Village'],
-      ['Maharashtra', 'Pune', 'Haveli', 'Hadapsar'],
-      ['Maharashtra', 'Pune', 'Haveli', 'Kharadi'],
-      ['Maharashtra', 'Nagpur', '', ''],
-      ['Karnataka', '', '', ''],
-    ])
-    locWs['!cols'] = [{ wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }]
-    XLSX.utils.book_append_sheet(wb, locWs, 'Locations')
+    const addSheet = (name: string, headers: { header: string; width: number }[], rows: (string | number)[][]) => {
+      const ws = wb.addWorksheet(name)
+      ws.columns = headers.map(h => ({ header: h.header, key: h.header, width: h.width }))
+      rows.forEach(r => ws.addRow(r))
+      ws.getRow(1).font = { bold: true }
+    }
 
-    const prodWs = XLSX.utils.aoa_to_sheet([
-      ['Category', 'Sub-Category', 'Product Name', 'Price', 'SKU'],
-      ['Electronics', 'Smartphones', 'iPhone 15', '79999', 'IPH15'],
-      ['Electronics', 'Smartphones', 'Samsung S24', '69999', 'SS24'],
-      ['Electronics', '', '', '', ''],
-      ['Apparel', 'Shirts', 'Cotton Shirt', '599', 'SH001'],
-    ])
-    prodWs['!cols'] = [{ wch: 20 }, { wch: 20 }, { wch: 25 }, { wch: 10 }, { wch: 12 }]
-    XLSX.utils.book_append_sheet(wb, prodWs, 'Products')
+    addSheet('Locations',
+      [{ header: 'State', width: 20 }, { header: 'District', width: 20 }, { header: 'Taluka', width: 20 }, { header: 'Village', width: 20 }],
+      [['Maharashtra', 'Pune', 'Haveli', 'Hadapsar'], ['Maharashtra', 'Pune', 'Haveli', 'Kharadi'], ['Maharashtra', 'Nagpur', '', ''], ['Karnataka', '', '', '']]
+    )
+    addSheet('Products',
+      [{ header: 'Category', width: 20 }, { header: 'Sub-Category', width: 20 }, { header: 'Product Name', width: 25 }, { header: 'Price', width: 10 }, { header: 'SKU', width: 12 }],
+      [['Electronics', 'Smartphones', 'iPhone 15', 79999, 'IPH15'], ['Electronics', 'Smartphones', 'Samsung S24', 69999, 'SS24'], ['Electronics', '', '', '', ''], ['Apparel', 'Shirts', 'Cotton Shirt', 599, 'SH001']]
+    )
+    addSheet('Distributors',
+      [{ header: 'Name', width: 25 }, { header: 'Phone', width: 12 }, { header: 'Address', width: 30 }, { header: 'Description', width: 30 }, { header: 'District', width: 15 }, { header: 'Taluka', width: 15 }, { header: 'Village', width: 15 }, { header: 'Latitude', width: 10 }, { header: 'Longitude', width: 10 }],
+      [['Sharma Distributors', '9876543210', '123 Market Road, Pune', 'Primary western region distributor', 'Pune', 'Haveli', '', '', ''], ['Patil Enterprises', '9123456780', '45 Station Road, Nagpur', '', 'Nagpur', 'Hingna', '', '', '']]
+    )
+    addSheet('Dealers',
+      [{ header: 'Name', width: 25 }, { header: 'Phone', width: 12 }, { header: 'Address', width: 25 }, { header: 'Description', width: 25 }, { header: 'District', width: 15 }, { header: 'Taluka', width: 15 }, { header: 'Village', width: 15 }, { header: 'Distributor', width: 25 }, { header: 'Latitude', width: 10 }, { header: 'Longitude', width: 10 }],
+      [['ABC Traders', '9988776655', '12 Gandhi Nagar', '', 'Pune', 'Haveli', 'Hadapsar', 'Sharma Distributors', '', ''], ['XYZ Stores', '9871234560', '67 Ring Road', '', 'Pune', 'Haveli', 'Kharadi', 'Sharma Distributors', '', ''], ['Kumar Sales', '9000012345', '5 Civil Lines', '', 'Nagpur', 'Hingna', '', 'Patil Enterprises', '', '']]
+    )
 
-    const distWs = XLSX.utils.aoa_to_sheet([
-      ['Name', 'Phone', 'Address', 'Description', 'District', 'Taluka', 'Village', 'Latitude', 'Longitude'],
-      ['Sharma Distributors', '9876543210', '123 Market Road, Pune', 'Primary western region distributor', 'Pune', 'Haveli', '', '', ''],
-      ['Patil Enterprises', '9123456780', '45 Station Road, Nagpur', '', 'Nagpur', 'Hingna', '', '', ''],
-    ])
-    distWs['!cols'] = [{ wch: 25 }, { wch: 12 }, { wch: 30 }, { wch: 30 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 10 }]
-    XLSX.utils.book_append_sheet(wb, distWs, 'Distributors')
-
-    const dealerWs = XLSX.utils.aoa_to_sheet([
-      ['Name', 'Phone', 'Address', 'Description', 'District', 'Taluka', 'Village', 'Distributor', 'Latitude', 'Longitude'],
-      ['ABC Traders', '9988776655', '12 Gandhi Nagar', '', 'Pune', 'Haveli', 'Hadapsar', 'Sharma Distributors', '', ''],
-      ['XYZ Stores', '9871234560', '67 Ring Road', '', 'Pune', 'Haveli', 'Kharadi', 'Sharma Distributors', '', ''],
-      ['Kumar Sales', '9000012345', '5 Civil Lines', '', 'Nagpur', 'Hingna', '', 'Patil Enterprises', '', ''],
-    ])
-    dealerWs['!cols'] = [{ wch: 25 }, { wch: 12 }, { wch: 25 }, { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 25 }, { wch: 10 }, { wch: 10 }]
-    XLSX.utils.book_append_sheet(wb, dealerWs, 'Dealers')
-
-    XLSX.writeFile(wb, 'masters-import-template.xlsx')
+    const buf = await wb.xlsx.writeBuffer()
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'masters-import-template.xlsx'
+    a.click()
+    URL.revokeObjectURL(a.href)
   }
 
   // ── File parsing ──────────────────────────────────────────────────────────
@@ -124,16 +117,29 @@ export default function MastersImportPage() {
 
     try {
       const buf = await file.arrayBuffer()
-      const XLSX = await import('xlsx')
-      const wb = XLSX.read(buf, { type: 'array' })
+      const ExcelJS = (await import('exceljs')).default
+      const wb = new ExcelJS.Workbook()
+      await wb.xlsx.load(buf)
 
-      const sheet = wb.Sheets[cfg.sheetName]
-      if (!sheet) {
+      const ws = wb.getWorksheet(cfg.sheetName)
+      if (!ws) {
         setParseError(`Sheet "${cfg.sheetName}" not found in this file. Please use the provided template.`)
         return
       }
 
-      const parsed = XLSX.utils.sheet_to_json(sheet, { defval: '' }) as RawRow[]
+      // First row is headers
+      const headerRow = ws.getRow(1).values as (string | undefined)[]
+      const headers = headerRow.slice(1).map(h => String(h ?? ''))
+
+      const parsed: RawRow[] = []
+      ws.eachRow((row, rowNum) => {
+        if (rowNum === 1) return
+        const vals = row.values as (string | number | null | undefined)[]
+        const obj: RawRow = {}
+        headers.forEach((h, i) => { obj[h] = String(vals[i + 1] ?? '') })
+        parsed.push(obj)
+      })
+
       if (parsed.length === 0) {
         setParseError('The sheet is empty. Add data rows below the header row.')
         return
