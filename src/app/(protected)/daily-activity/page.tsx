@@ -426,6 +426,10 @@ function AddMeetingModal({ onClose, onAdd }: { onClose: () => void; onAdd: (v: P
   const [npStateId, setNpStateId]     = useState('')
   const [placeOptions, setPlaceOptions] = useState<{ value: string; label: string }[]>([])
   const [placeMap, setPlaceMap] = useState<Map<string, { state_id: string; district_id: string; taluka_id: string; village_id: string | null }>>(new Map())
+  const [placeQuery, setPlaceQuery] = useState('')
+  const [placeDropOpen, setPlaceDropOpen] = useState(false)
+  const [entityQuery, setEntityQuery] = useState('')
+  const [entityDropOpen, setEntityDropOpen] = useState(false)
 
   useEffect(() => {
     fetch('/api/masters/lead-types').then(r => r.json()).then((d: { id: string; name: string }[]) => {
@@ -465,6 +469,7 @@ function AddMeetingModal({ onClose, onAdd }: { onClose: () => void; onAdd: (v: P
   useEffect(() => {
     if (!visitType || mode === 'new_prospect') return
     setEntityId('')
+    setEntityQuery('')
     setEntLoading(true)
     const status = mode === 'lead' ? 'lead' : 'existing'
     fetch(`/api/business-partners?type=${encodeURIComponent(visitType)}&status=${status}`)
@@ -478,6 +483,9 @@ function AddMeetingModal({ onClose, onAdd }: { onClose: () => void; onAdd: (v: P
     const r = placeMap.get(val)
     if (r) { setNpStateId(r.state_id); setNpDistrictId(r.district_id); setNpTalukaId(r.taluka_id); setNpVillageId(r.village_id ?? '') }
     else { setNpStateId(''); setNpDistrictId(''); setNpTalukaId(''); setNpVillageId('') }
+    const label = placeOptions.find(o => o.value === val)?.label ?? ''
+    setPlaceQuery(label)
+    setPlaceDropOpen(false)
   }
 
   function handleAdd() {
@@ -507,15 +515,14 @@ function AddMeetingModal({ onClose, onAdd }: { onClose: () => void; onAdd: (v: P
         <div className="px-5 py-4 space-y-4">
           {/* Step 1: Type */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Lead Type</label>
-            <div className="flex flex-wrap gap-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Lead Type</label>
+            <select value={visitType} onChange={e => setVisitType(e.target.value)}
+              className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+              <option value="">Select type…</option>
               {leadTypes.map(t => (
-                <button key={t.id} onClick={() => setVisitType(t.name)}
-                  className={`px-3 py-2 rounded-xl text-sm font-medium border-2 transition ${visitType === t.name ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
-                  {t.name}
-                </button>
+                <option key={t.id} value={t.name}>{t.name}</option>
               ))}
-            </div>
+            </select>
           </div>
 
           {/* Step 2: Mode */}
@@ -540,11 +547,38 @@ function AddMeetingModal({ onClose, onAdd }: { onClose: () => void; onAdd: (v: P
               {entLoading ? (
                 <div className="text-sm text-gray-400 py-2">Loading…</div>
               ) : (
-                <select value={entityId} onChange={e => setEntityId(e.target.value)}
-                  className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                  <option value="">Choose…</option>
-                  {entities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-                </select>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={entityQuery}
+                    onChange={e => { setEntityQuery(e.target.value); setEntityId(''); setEntityDropOpen(true) }}
+                    onFocus={() => setEntityDropOpen(true)}
+                    onBlur={() => setTimeout(() => setEntityDropOpen(false), 150)}
+                    placeholder="Search…"
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {entityDropOpen && (
+                    <ul className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                      {(entityQuery
+                        ? entities.filter(e => e.name.toLowerCase().includes(entityQuery.toLowerCase()))
+                        : entities
+                      ).length === 0 ? (
+                        <li className="px-3 py-2 text-sm text-gray-400">No matches</li>
+                      ) : (
+                        (entityQuery
+                          ? entities.filter(e => e.name.toLowerCase().includes(entityQuery.toLowerCase()))
+                          : entities
+                        ).map(e => (
+                          <li key={e.id}
+                            onMouseDown={() => { setEntityId(e.id); setEntityQuery(e.name); setEntityDropOpen(false) }}
+                            className="px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 hover:text-blue-700">
+                            {e.name}
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                  )}
+                </div>
               )}
               {entities.length === 0 && !entLoading && (
                 <p className="text-xs text-amber-600 mt-1">No records found for this type / status.</p>
@@ -564,11 +598,32 @@ function AddMeetingModal({ onClose, onAdd }: { onClose: () => void; onAdd: (v: P
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Place</label>
-                <select value={npPlace} onChange={e => handlePlaceSelect(e.target.value)}
-                  className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                  <option value="">Select place…</option>
-                  {placeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={placeQuery}
+                    onChange={e => { setPlaceQuery(e.target.value); setNpPlace(''); setPlaceDropOpen(true) }}
+                    onFocus={() => setPlaceDropOpen(true)}
+                    onBlur={() => setTimeout(() => setPlaceDropOpen(false), 150)}
+                    placeholder="Search district, taluka or village…"
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {placeDropOpen && placeQuery.length >= 1 && (
+                    <ul className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                      {placeOptions.filter(o => o.label.toLowerCase().includes(placeQuery.toLowerCase())).slice(0, 50).length === 0 ? (
+                        <li className="px-3 py-2 text-sm text-gray-400">No matches</li>
+                      ) : (
+                        placeOptions.filter(o => o.label.toLowerCase().includes(placeQuery.toLowerCase())).slice(0, 50).map(o => (
+                          <li key={o.value}
+                            onMouseDown={() => handlePlaceSelect(o.value)}
+                            className="px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 hover:text-blue-700">
+                            {o.label}
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                  )}
+                </div>
               </div>
             </div>
           )}
