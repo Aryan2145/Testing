@@ -1294,7 +1294,13 @@ function DailyActivityInner() {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'start', latitude, longitude, address }),
     })
-    if (!r.ok) { toast((await r.json()).error, 'error') } else { loadVisits() }
+    if (!r.ok) {
+      const err = await r.json()
+      toast(err.error, 'error')
+      if (err.error?.includes('active')) loadVisits() // refresh so user can see the active meeting
+    } else {
+      loadVisits()
+    }
     setActing(false)
   }
 
@@ -1476,18 +1482,25 @@ function DailyActivityInner() {
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
           <div className="absolute inset-0 bg-black/40" />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <button
+              onClick={() => setLocationDenied(null)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 transition"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
             <div className="flex flex-col items-center text-center gap-3 mb-5">
               <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
                 <svg className="w-7 h-7 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3m0 3h.01" className="text-red-400" />
                 </svg>
               </div>
               <div>
                 <h3 className="font-semibold text-gray-900 text-base">Location Access Blocked</h3>
                 <p className="text-sm text-gray-500 mt-1">
-                  Your browser has blocked location access. The meeting won&apos;t have GPS coordinates unless you enable it.
+                  Your browser has blocked location access. Please enable it to {locationDenied.action === 'start' ? 'start' : 'stop'} the meeting.
                 </p>
               </div>
               <div className="w-full bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-left text-xs text-amber-800 space-y-1">
@@ -1497,38 +1510,17 @@ function DailyActivityInner() {
                 <p>• Then tap <strong>Try Again</strong> below</p>
               </div>
             </div>
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={() => {
-                  const { visitId, action } = locationDenied
-                  setLocationDenied(null)
-                  if (action === 'start') handleStart(visitId)
-                  else handleStop(visitId)
-                }}
-                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition"
-              >
-                Try Again
-              </button>
-              <button
-                onClick={async () => {
-                  const { visitId, action } = locationDenied
-                  setLocationDenied(null)
-                  setActing(true)
-                  const body = action === 'start'
-                    ? { action: 'start', latitude: null, longitude: null, address: null }
-                    : { action: 'stop', end_latitude: null, end_longitude: null, end_address: null }
-                  const r = await fetch(`/api/daily-activity/${visitId}`, {
-                    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body),
-                  })
-                  if (!r.ok) { toast((await r.json()).error, 'error') } else { loadVisits() }
-                  setActing(false)
-                }}
-                className="w-full py-2.5 border border-gray-300 text-gray-600 hover:bg-gray-50 rounded-xl text-sm font-medium transition"
-              >
-                {locationDenied.action === 'start' ? 'Start Without Location' : 'Stop Without Location'}
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                const { visitId, action } = locationDenied
+                setLocationDenied(null)
+                if (action === 'start') handleStart(visitId)
+                else handleStop(visitId)
+              }}
+              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition"
+            >
+              Try Again
+            </button>
           </div>
         </div>
       )}

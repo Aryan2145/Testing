@@ -10,17 +10,34 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const { action, latitude, longitude, address } = body
 
   if (action === 'start') {
-    // Check no other visit is currently Active for this user
+    // Find any other active visits for this user
     const { data: active } = await supabase
       .from('daily_visits')
-      .select('id')
+      .select('id, start_time')
       .eq('tenant_id', getTenantId())
       .eq('user_id', user.userId)
       .eq('status', 'Active')
       .neq('id', params.id)
-      .limit(1)
+
     if (active && active.length > 0) {
-      return NextResponse.json({ error: 'Another visit is already active. Stop it first.' }, { status: 400 })
+      const todayStr = new Date().toISOString().slice(0, 10)
+      const staleIds = active
+        .filter(v => !v.start_time || v.start_time.slice(0, 10) < todayStr)
+        .map(v => v.id)
+      const todayActive = active.filter(v => v.start_time && v.start_time.slice(0, 10) === todayStr)
+
+      // Auto-stop stale meetings from previous days
+      if (staleIds.length > 0) {
+        await supabase
+          .from('daily_visits')
+          .update({ status: 'Completed', end_time: new Date().toISOString() })
+          .in('id', staleIds)
+      }
+
+      // Still block if there's an active visit from today
+      if (todayActive.length > 0) {
+        return NextResponse.json({ error: 'Another meeting is already active today. Stop it first.' }, { status: 400 })
+      }
     }
     const { data, error } = await supabase
       .from('daily_visits')
