@@ -49,6 +49,13 @@ export async function POST(req: NextRequest) {
       role: user.profile,
       tenantId: user.tenant_id ?? process.env.DEFAULT_TENANT_ID ?? '',
     })
+    // Record login event (fire-and-forget, never block login)
+    void supabase.from('user_login_logs').insert({
+      tenant_id: user.tenant_id ?? process.env.DEFAULT_TENANT_ID,
+      user_id: user.id,
+      ip_address: req.headers.get('x-forwarded-for') ?? req.headers.get('x-real-ip') ?? null,
+      user_agent: req.headers.get('user-agent') ?? null,
+    })
     const res = NextResponse.json({ ok: true })
     res.cookies.set(COOKIE_NAME, token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 60 * 60 * 8 })
     return res

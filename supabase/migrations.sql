@@ -700,3 +700,26 @@ ALTER TABLE role_permissions DROP CONSTRAINT IF EXISTS role_permissions_profile_
 ALTER TABLE role_permissions ADD COLUMN IF NOT EXISTS data_scope TEXT NOT NULL DEFAULT 'team';
 UPDATE role_permissions SET data_scope = 'own' WHERE profile = 'Standard';
 UPDATE role_permissions SET data_scope = 'all' WHERE profile = 'Administrator';
+
+-- ================================================================
+-- user_usage_intelligence
+-- Login event tracking for User Usage Intelligence system
+-- ================================================================
+CREATE TABLE IF NOT EXISTS user_login_logs (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id     UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  user_id       UUID NOT NULL REFERENCES users(id)   ON DELETE CASCADE,
+  logged_in_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ip_address    TEXT,
+  user_agent    TEXT
+);
+
+-- Fast per-user timeline queries
+CREATE INDEX IF NOT EXISTS idx_ull_tenant_user_time
+  ON user_login_logs (tenant_id, user_id, logged_in_at DESC);
+
+-- Fast tenant-wide aggregation queries
+CREATE INDEX IF NOT EXISTS idx_ull_tenant_time
+  ON user_login_logs (tenant_id, logged_in_at DESC);
+
+ALTER TABLE user_login_logs ENABLE ROW LEVEL SECURITY;

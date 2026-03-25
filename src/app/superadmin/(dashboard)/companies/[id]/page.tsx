@@ -1,23 +1,38 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
 type Company = {
-  id: string
-  name: string
-  email: string | null
-  phone: string | null
-  address: string | null
-  gstin: string | null
-  license_count: number
-  payment_status: 'Active' | 'Overdue' | 'Suspended'
-  payment_due_date: string | null
-  is_active: boolean
-  total_users: number
-  active_users: number
+  id: string; name: string; email: string | null; phone: string | null
+  address: string | null; gstin: string | null; license_count: number
+  payment_status: 'Active' | 'Overdue' | 'Suspended'; payment_due_date: string | null
+  is_active: boolean; total_users: number; active_users: number
   adminUser: { id: string; name: string; email: string | null; contact: string } | null
 }
+
+type UsageSummary = {
+  total_users: number; active_status: number; inactive_status: number
+  actively_using: number; passive: number; low_usage: number
+  not_using: number; dormant_enabled: number; adoption_rate: number
+  power_users: { id: string; name: string; score_30d: number; classification: string }[]
+}
+
+type UserRow = {
+  id: string; name: string; contact: string; email: string | null
+  status: string; profile: string
+  last_login: string | null; logins_7d: number; logins_30d: number
+  last_activity: string | null
+  activity_score_7d: number; activity_score_30d: number
+  meetings_30d: number; meetings_completed_30d: number
+  orders_30d: number; orders_value_30d: number
+  expenses_30d: number; plans_submitted_30d: number; remarks_30d: number
+  classification: string
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────────
 
 const STATUS_STYLES = {
   Active: 'bg-green-50 text-green-700',
@@ -25,9 +40,326 @@ const STATUS_STYLES = {
   Suspended: 'bg-red-50 text-red-700',
 }
 
+const CLS_STYLES: Record<string, string> = {
+  actively_using:  'bg-emerald-50 text-emerald-700 border border-emerald-200',
+  passive:         'bg-amber-50 text-amber-700 border border-amber-200',
+  low_usage:       'bg-blue-50 text-blue-700 border border-blue-200',
+  not_using:       'bg-red-50 text-red-600 border border-red-200',
+  dormant_enabled: 'bg-gray-100 text-gray-500 border border-gray-300',
+}
+
+const CLS_LABELS: Record<string, string> = {
+  actively_using: 'Actively Using', passive: 'Passive',
+  low_usage: 'Low Usage', not_using: 'Not Using', dormant_enabled: 'Dormant',
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function fmtDate(ts: string | null) {
+  if (!ts) return '—'
+  const d = new Date(ts)
+  const diff = (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24)
+  if (diff < 1)   return 'Today'
+  if (diff < 2)   return 'Yesterday'
+  if (diff < 7)   return `${Math.floor(diff)}d ago`
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+}
+
+function fmtCurrency(n: number) {
+  if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`
+  if (n >= 1000)   return `₹${(n / 1000).toFixed(1)}K`
+  return `₹${n}`
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function SummaryCard({ label, value, sub, color = 'text-gray-900' }: {
+  label: string; value: string | number; sub?: string; color?: string
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className={`text-2xl font-bold ${color}`}>{value}</div>
+      <div className="text-xs font-medium text-gray-500 mt-0.5">{label}</div>
+      {sub && <div className="text-xs text-gray-400 mt-0.5">{sub}</div>}
+    </div>
+  )
+}
+
+function ClassBadge({ cls }: { cls: string }) {
+  return (
+    <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${CLS_STYLES[cls] ?? 'bg-gray-100 text-gray-500'}`}>
+      {CLS_LABELS[cls] ?? cls}
+    </span>
+  )
+}
+
+// ── Analytics Tab ─────────────────────────────────────────────────────────────
+
+function AnalyticsTab({ companyId }: { companyId: string }) {
+  const [summary, setSummary]   = useState<UsageSummary | null>(null)
+  const [users, setUsers]       = useState<UserRow[]>([])
+  const [total, setTotal]       = useState(0)
+  const [page, setPage]         = useState(1)
+  const [search, setSearch]     = useState('')
+  const [filterCls, setFilterCls] = useState('')
+  const [sortBy, setSortBy]     = useState('last_login')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [loadingS, setLoadingS] = useState(true)
+  const [loadingU, setLoadingU] = useState(true)
+  const LIMIT = 20
+
+  useEffect(() => {
+    fetch(`/api/superadmin/companies/${companyId}/usage-summary`)
+      .then(r => r.json()).then(setSummary).catch(() => {}).finally(() => setLoadingS(false))
+  }, [companyId])
+
+  const loadUsers = useCallback(() => {
+    setLoadingU(true)
+    const q = new URLSearchParams({
+      page: String(page), limit: String(LIMIT),
+      search, classification: filterCls,
+      sort: sortBy, order: sortOrder,
+    })
+    fetch(`/api/superadmin/companies/${companyId}/users?${q}`)
+      .then(r => r.json())
+      .then(d => { setUsers(d.items ?? []); setTotal(d.total ?? 0) })
+      .catch(() => {})
+      .finally(() => setLoadingU(false))
+  }, [companyId, page, search, filterCls, sortBy, sortOrder])
+
+  useEffect(() => { loadUsers() }, [loadUsers])
+
+  // reset to page 1 when filters change
+  useEffect(() => { setPage(1) }, [search, filterCls, sortBy, sortOrder])
+
+  function toggleSort(col: string) {
+    if (sortBy === col) setSortOrder(o => o === 'asc' ? 'desc' : 'asc')
+    else { setSortBy(col); setSortOrder('desc') }
+  }
+
+  const totalPages = Math.ceil(total / LIMIT)
+
+  return (
+    <div className="space-y-6">
+      {/* Summary cards */}
+      {loadingS ? (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="bg-white rounded-xl border border-gray-200 p-4 animate-pulse h-20" />
+          ))}
+        </div>
+      ) : summary && (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <SummaryCard label="Total Users"      value={summary.total_users} />
+            <SummaryCard label="Adoption Rate"    value={`${summary.adoption_rate}%`}
+              sub="Actively using" color={summary.adoption_rate >= 60 ? 'text-emerald-600' : summary.adoption_rate >= 30 ? 'text-amber-600' : 'text-red-600'} />
+            <SummaryCard label="Actively Using"   value={summary.actively_using}  color="text-emerald-600" />
+            <SummaryCard label="Dormant (Enabled)" value={summary.dormant_enabled} color={summary.dormant_enabled > 0 ? 'text-red-600' : 'text-gray-900'}
+              sub={summary.dormant_enabled > 0 ? 'Paying but not using' : undefined} />
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <SummaryCard label="Passive Users"  value={summary.passive}       color="text-amber-600" sub="Logged in, no actions" />
+            <SummaryCard label="Low Usage"      value={summary.low_usage}     color="text-blue-600"  sub="Occasional activity" />
+            <SummaryCard label="Not Using"      value={summary.not_using}     color="text-red-600"   sub="No login in 30 days" />
+            <SummaryCard label="Account Status" value={`${summary.active_status} / ${summary.total_users}`}
+              sub={`${summary.inactive_status} inactive`} />
+          </div>
+
+          {/* Power Users */}
+          {summary.power_users.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">Power Users — Top {summary.power_users.length} by Activity (30 days)</h3>
+              <div className="space-y-2">
+                {summary.power_users.map((u, i) => (
+                  <div key={u.id} className="flex items-center gap-3">
+                    <span className="w-5 text-xs text-gray-400 font-mono text-right">{i + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-900 truncate">{u.name}</span>
+                        <ClassBadge cls={u.classification} />
+                      </div>
+                      <div className="mt-0.5 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-emerald-400 rounded-full transition-all"
+                          style={{ width: `${Math.min(100, (u.score_30d / (summary.power_users[0]?.score_30d || 1)) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                    <span className="text-xs font-semibold text-gray-700 w-12 text-right">{u.score_30d} pts</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Classification breakdown bar */}
+          {summary.total_users > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">Engagement Breakdown</h3>
+              <div className="flex h-4 rounded-full overflow-hidden gap-px">
+                {[
+                  { key: 'actively_using', count: summary.actively_using,  color: 'bg-emerald-400' },
+                  { key: 'passive',        count: summary.passive,          color: 'bg-amber-400'   },
+                  { key: 'low_usage',      count: summary.low_usage,        color: 'bg-blue-400'    },
+                  { key: 'dormant_enabled',count: summary.dormant_enabled,  color: 'bg-gray-300'    },
+                  { key: 'not_using',      count: summary.not_using,        color: 'bg-red-300'     },
+                ].filter(s => s.count > 0).map(s => (
+                  <div key={s.key} className={`${s.color} transition-all`}
+                    style={{ width: `${(s.count / summary.total_users) * 100}%` }}
+                    title={`${CLS_LABELS[s.key]}: ${s.count}`} />
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-3 mt-2">
+                {[
+                  { key: 'actively_using', color: 'bg-emerald-400' },
+                  { key: 'passive',        color: 'bg-amber-400'   },
+                  { key: 'low_usage',      color: 'bg-blue-400'    },
+                  { key: 'dormant_enabled',color: 'bg-gray-300'    },
+                  { key: 'not_using',      color: 'bg-red-300'     },
+                ].map(s => (
+                  <div key={s.key} className="flex items-center gap-1.5">
+                    <div className={`w-2.5 h-2.5 rounded-full ${s.color}`} />
+                    <span className="text-xs text-gray-500">{CLS_LABELS[s.key]}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* User table */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        {/* Toolbar */}
+        <div className="p-4 border-b border-gray-100 flex flex-wrap items-center gap-3">
+          <div className="flex-1 min-w-48">
+            <input
+              type="text" placeholder="Search name, phone, email…" value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+            />
+          </div>
+          <select value={filterCls} onChange={e => setFilterCls(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white">
+            <option value="">All Classifications</option>
+            <option value="actively_using">Actively Using</option>
+            <option value="passive">Passive</option>
+            <option value="low_usage">Low Usage</option>
+            <option value="dormant_enabled">Dormant</option>
+            <option value="not_using">Not Using</option>
+          </select>
+          <span className="text-xs text-gray-400">{total} user{total !== 1 ? 's' : ''}</span>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100 text-xs text-gray-500 font-medium">
+                <th className="text-left px-4 py-3">User</th>
+                <th className="text-left px-4 py-3">Status</th>
+                <th className="text-left px-4 py-3 cursor-pointer hover:text-gray-700" onClick={() => toggleSort('last_login')}>
+                  Last Login {sortBy === 'last_login' ? (sortOrder === 'desc' ? '↓' : '↑') : ''}
+                </th>
+                <th className="text-left px-4 py-3 cursor-pointer hover:text-gray-700" onClick={() => toggleSort('last_activity')}>
+                  Last Action {sortBy === 'last_activity' ? (sortOrder === 'desc' ? '↓' : '↑') : ''}
+                </th>
+                <th className="text-right px-4 py-3 cursor-pointer hover:text-gray-700" onClick={() => toggleSort('score_30d')}>
+                  Score 30d {sortBy === 'score_30d' ? (sortOrder === 'desc' ? '↓' : '↑') : ''}
+                </th>
+                <th className="text-right px-4 py-3">Logins 30d</th>
+                <th className="text-right px-4 py-3 cursor-pointer hover:text-gray-700" onClick={() => toggleSort('orders_value')}>
+                  Orders {sortBy === 'orders_value' ? (sortOrder === 'desc' ? '↓' : '↑') : ''}
+                </th>
+                <th className="text-right px-4 py-3">Meetings</th>
+                <th className="text-left px-4 py-3">Classification</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {loadingU ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i}>
+                    {Array.from({ length: 9 }).map((__, j) => (
+                      <td key={j} className="px-4 py-3">
+                        <div className="h-3 bg-gray-100 rounded animate-pulse" />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : users.length === 0 ? (
+                <tr><td colSpan={9} className="px-4 py-10 text-center text-sm text-gray-400">No users found</td></tr>
+              ) : (
+                users.map(u => (
+                  <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="font-medium text-gray-900">{u.name}</div>
+                      <div className="text-xs text-gray-400">{u.contact}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${u.status === 'Active' ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                        {u.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">
+                      <div>{fmtDate(u.last_login)}</div>
+                      {u.logins_7d > 0 && <div className="text-xs text-gray-400">{u.logins_7d}x this week</div>}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">{fmtDate(u.last_activity)}</td>
+                    <td className="px-4 py-3 text-right">
+                      <span className={`font-semibold ${u.activity_score_30d >= 20 ? 'text-emerald-600' : u.activity_score_30d >= 5 ? 'text-amber-600' : 'text-gray-400'}`}>
+                        {u.activity_score_30d}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right text-gray-600">{u.logins_30d}</td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="text-gray-700 font-medium">{u.orders_30d > 0 ? fmtCurrency(u.orders_value_30d) : '—'}</div>
+                      {u.orders_30d > 0 && <div className="text-xs text-gray-400">{u.orders_30d} orders</div>}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="text-gray-700">{u.meetings_30d > 0 ? u.meetings_30d : '—'}</div>
+                      {u.meetings_completed_30d > 0 && (
+                        <div className="text-xs text-gray-400">{u.meetings_completed_30d} done</div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3"><ClassBadge cls={u.classification} /></td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between">
+            <span className="text-xs text-gray-400">
+              Page {page} of {totalPages} · {total} users
+            </span>
+            <div className="flex gap-2">
+              <button onClick={() => setPage(p => p - 1)} disabled={page === 1}
+                className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition">
+                Previous
+              </button>
+              <button onClick={() => setPage(p => p + 1)} disabled={page === totalPages}
+                className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition">
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
+
 export default function CompanyDetailPage({ params }: { params: { id: string } }) {
   const { id } = params
   const router = useRouter()
+  const [activeTab, setActiveTab] = useState<'settings' | 'analytics'>('settings')
   const [company, setCompany] = useState<Company | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -37,9 +369,7 @@ export default function CompanyDetailPage({ params }: { params: { id: string } }
     name: '', email: '', phone: '', address: '', gstin: '',
     license_count: '', payment_status: 'Active', payment_due_date: '',
   })
-  const [adminForm, setAdminForm] = useState({
-    id: '', name: '', email: '', contact: '', newPassword: '',
-  })
+  const [adminForm, setAdminForm] = useState({ id: '', name: '', email: '', contact: '', newPassword: '' })
   const [confirmDisable, setConfirmDisable] = useState(false)
   const [showCreateAdmin, setShowCreateAdmin] = useState(false)
   const [createAdminForm, setCreateAdminForm] = useState({ name: '', contact: '', email: '', password: '' })
@@ -52,59 +382,35 @@ export default function CompanyDetailPage({ params }: { params: { id: string } }
     const data: Company = await res.json()
     setCompany(data)
     setForm({
-      name: data.name,
-      email: data.email ?? '',
-      phone: data.phone ?? '',
-      address: data.address ?? '',
-      gstin: data.gstin ?? '',
+      name: data.name, email: data.email ?? '', phone: data.phone ?? '',
+      address: data.address ?? '', gstin: data.gstin ?? '',
       license_count: String(data.license_count),
-      payment_status: data.payment_status,
-      payment_due_date: data.payment_due_date ?? '',
+      payment_status: data.payment_status, payment_due_date: data.payment_due_date ?? '',
     })
     if (data.adminUser) {
-      setAdminForm({
-        id: data.adminUser.id,
-        name: data.adminUser.name,
-        email: data.adminUser.email ?? '',
-        contact: data.adminUser.contact,
-        newPassword: '',
-      })
+      setAdminForm({ id: data.adminUser.id, name: data.adminUser.name, email: data.adminUser.email ?? '', contact: data.adminUser.contact, newPassword: '' })
     }
     setLoading(false)
   }
 
   useEffect(() => { load() }, [id])
 
-  const F = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
-    setForm(f => ({ ...f, [k]: e.target.value }))
-  const AF = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setAdminForm(f => ({ ...f, [k]: e.target.value }))
+  const F   = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setForm(f => ({ ...f, [k]: e.target.value }))
+  const AF  = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setAdminForm(f => ({ ...f, [k]: e.target.value }))
+  const CAF = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setCreateAdminForm(f => ({ ...f, [k]: e.target.value }))
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
     if (!form.name.trim()) { setError('Company name is required'); return }
     setError(''); setSuccess(''); setSaving(true)
     const res = await fetch(`/api/superadmin/companies/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: form.name.trim(),
-        email: form.email.trim() || null,
-        phone: form.phone.trim() || null,
-        address: form.address.trim() || null,
-        gstin: form.gstin.trim().toUpperCase() || null,
-        license_count: Number(form.license_count),
-        payment_status: form.payment_status,
+        name: form.name.trim(), email: form.email.trim() || null, phone: form.phone.trim() || null,
+        address: form.address.trim() || null, gstin: form.gstin.trim().toUpperCase() || null,
+        license_count: Number(form.license_count), payment_status: form.payment_status,
         payment_due_date: form.payment_due_date || null,
-        ...(adminForm.id ? {
-          adminUser: {
-            id: adminForm.id,
-            name: adminForm.name,
-            email: adminForm.email,
-            contact: adminForm.contact,
-            password: adminForm.newPassword || undefined,
-          }
-        } : {}),
+        ...(adminForm.id ? { adminUser: { id: adminForm.id, name: adminForm.name, email: adminForm.email, contact: adminForm.contact, password: adminForm.newPassword || undefined } } : {}),
       }),
     })
     const data = await res.json()
@@ -119,20 +425,10 @@ export default function CompanyDetailPage({ params }: { params: { id: string } }
   async function toggleActive() {
     if (!company) return
     if (!company.is_active) {
-      // Re-enable
-      const res = await fetch(`/api/superadmin/companies/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_active: true }),
-      })
+      const res = await fetch(`/api/superadmin/companies/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: true }) })
       if (res.ok) setCompany(c => c ? { ...c, is_active: true } : c)
-    } else {
-      setConfirmDisable(true)
-    }
+    } else { setConfirmDisable(true) }
   }
-
-  const CAF = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setCreateAdminForm(f => ({ ...f, [k]: e.target.value }))
 
   async function handleCreateAdmin(e: React.FormEvent) {
     e.preventDefault()
@@ -140,15 +436,10 @@ export default function CompanyDetailPage({ params }: { params: { id: string } }
     if (!/^\d{10}$/.test(createAdminForm.contact.trim())) { setCreateAdminError('Phone must be exactly 10 digits'); return }
     if (!createAdminForm.password.trim()) { setCreateAdminError('Password is required'); return }
     setCreateAdminError(''); setCreateAdminSaving(true)
-    const res = await fetch(`/api/superadmin/companies/${id}/admin`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(createAdminForm),
-    })
+    const res = await fetch(`/api/superadmin/companies/${id}/admin`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(createAdminForm) })
     const data = await res.json()
     setCreateAdminSaving(false)
     if (!res.ok) { setCreateAdminError(data.error || 'Failed to create admin'); return }
-    // Refresh company data to show the new admin
     setShowCreateAdmin(false)
     setCreateAdminForm({ name: '', contact: '', email: '', password: '' })
     await load()
@@ -156,26 +447,16 @@ export default function CompanyDetailPage({ params }: { params: { id: string } }
 
   async function confirmDisableAction() {
     setConfirmDisable(false)
-    const res = await fetch(`/api/superadmin/companies/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ is_active: false }),
-    })
+    const res = await fetch(`/api/superadmin/companies/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: false }) })
     if (res.ok) setCompany(c => c ? { ...c, is_active: false } : c)
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-48">
-        <div className="text-sm text-gray-500">Loading…</div>
-      </div>
-    )
-  }
-
+  if (loading) return <div className="flex items-center justify-center h-48"><div className="text-sm text-gray-500">Loading…</div></div>
   if (!company) return null
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="max-w-5xl space-y-6">
+      {/* Header */}
       <div className="flex items-center gap-3">
         <button onClick={() => router.push('/superadmin/companies')} className="text-gray-400 hover:text-gray-600 transition-colors">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -185,42 +466,26 @@ export default function CompanyDetailPage({ params }: { params: { id: string } }
         <div>
           <h1 className="text-xl font-semibold text-gray-900">{company.name}</h1>
           <div className="flex items-center gap-2 mt-0.5">
-            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[company.payment_status]}`}>
-              {company.payment_status}
-            </span>
-            {!company.is_active && (
-              <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                Disabled
-              </span>
-            )}
+            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[company.payment_status]}`}>{company.payment_status}</span>
+            {!company.is_active && <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">Disabled</span>}
           </div>
         </div>
       </div>
 
-      {/* No admin warning */}
+      {/* Banners */}
       {!company.adminUser && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex items-center justify-between gap-4">
-          <div className="text-sm text-amber-800">
-            <span className="font-semibold">No Administrator found.</span> This company has no admin user and cannot log in.
-          </div>
-          <button
-            onClick={() => setShowCreateAdmin(true)}
-            className="shrink-0 bg-amber-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-amber-700 transition-colors"
-          >
-            Create Admin
-          </button>
+          <div className="text-sm text-amber-800"><span className="font-semibold">No Administrator found.</span> This company has no admin user and cannot log in.</div>
+          <button onClick={() => setShowCreateAdmin(true)} className="shrink-0 bg-amber-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-amber-700 transition-colors">Create Admin</button>
         </div>
       )}
-
-      {/* Status warning */}
       {(!company.is_active || company.payment_status === 'Suspended') && (
         <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
-          {!company.is_active
-            ? 'This company is disabled. All users are blocked from logging in.'
-            : "This company's payment is suspended. All users are blocked from logging in."}
+          {!company.is_active ? 'This company is disabled. All users are blocked from logging in.' : "This company's payment is suspended. All users are blocked from logging in."}
         </div>
       )}
 
+      {/* Quick stats */}
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
           <div className="text-2xl font-bold text-gray-900">{company.total_users}</div>
@@ -238,97 +503,108 @@ export default function CompanyDetailPage({ params }: { params: { id: string } }
         </div>
       </div>
 
-      {/* Edit form */}
-      <form onSubmit={handleSave} className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
-        <h2 className="font-medium text-gray-900">Company Settings</h2>
+      {/* Tabs */}
+      <div className="border-b border-gray-200">
+        <div className="flex gap-6">
+          {(['settings', 'analytics'] as const).map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === tab ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+              {tab === 'settings' ? 'Company Settings' : 'Users & Analytics'}
+            </button>
+          ))}
+        </div>
+      </div>
 
-        {error && <div className="bg-red-50 text-red-700 text-sm px-3 py-2 rounded-lg">{error}</div>}
-        {success && <div className="bg-green-50 text-green-700 text-sm px-3 py-2 rounded-lg">{success}</div>}
+      {/* Settings tab */}
+      {activeTab === 'settings' && (
+        <form onSubmit={handleSave} className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+          {error   && <div className="bg-red-50 text-red-700 text-sm px-3 py-2 rounded-lg">{error}</div>}
+          {success && <div className="bg-green-50 text-green-700 text-sm px-3 py-2 rounded-lg">{success}</div>}
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Company Name <span className="text-red-500">*</span></label>
-          <input type="text" value={form.name} onChange={F('name')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input type="email" value={form.email} onChange={F('email')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+            <label className="block text-sm font-medium text-gray-700 mb-1">Company Name <span className="text-red-500">*</span></label>
+            <input type="text" value={form.name} onChange={F('name')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-            <input type="tel" value={form.phone} onChange={F('phone')} maxLength={10} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-          </div>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-          <textarea value={form.address} onChange={F('address')} rows={2} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">GSTIN</label>
-          <input type="text" value={form.gstin} onChange={F('gstin')} maxLength={15} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 uppercase" />
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">License Count</label>
-            <input type="number" value={form.license_count} onChange={F('license_count')} min={1} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Payment Status</label>
-            <select value={form.payment_status} onChange={F('payment_status')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white">
-              <option value="Active">Active</option>
-              <option value="Overdue">Overdue</option>
-              <option value="Suspended">Suspended</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Payment Due Date</label>
-            <input type="date" value={form.payment_due_date} onChange={F('payment_due_date')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-          </div>
-        </div>
-
-        {/* Admin User section */}
-        {adminForm.id && (
-          <div className="border-t border-gray-100 pt-4 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <h2 className="font-medium text-gray-900">Admin User</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Administrator account for this company</p>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input type="email" value={form.email} onChange={F('email')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-              <input type="text" value={adminForm.name} onChange={AF('name')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+              <input type="tel" value={form.phone} onChange={F('phone')} maxLength={10} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+            <textarea value={form.address} onChange={F('address')} rows={2} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">GSTIN</label>
+            <input type="text" value={form.gstin} onChange={F('gstin')} maxLength={15} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 uppercase" />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">License Count</label>
+              <input type="number" value={form.license_count} onChange={F('license_count')} min={1} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Payment Status</label>
+              <select value={form.payment_status} onChange={F('payment_status')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white">
+                <option value="Active">Active</option>
+                <option value="Overdue">Overdue</option>
+                <option value="Suspended">Suspended</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Payment Due Date</label>
+              <input type="date" value={form.payment_due_date} onChange={F('payment_due_date')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+            </div>
+          </div>
+
+          {adminForm.id && (
+            <div className="border-t border-gray-100 pt-4 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Phone (Login)</label>
-                <input type="tel" value={adminForm.contact} onChange={AF('contact')} maxLength={10} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                <h2 className="font-medium text-gray-900">Admin User</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Administrator account for this company</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input type="email" value={adminForm.email} onChange={AF('email')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                <input type="text" value={adminForm.name} onChange={AF('name')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone (Login)</label>
+                  <input type="tel" value={adminForm.contact} onChange={AF('contact')} maxLength={10} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <input type="email" value={adminForm.email} onChange={AF('email')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">New Password <span className="text-gray-400 font-normal">(leave blank to keep current)</span></label>
+                <input type="text" value={adminForm.newPassword} onChange={AF('newPassword')} placeholder="Enter new password to change" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
               </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">New Password <span className="text-gray-400 font-normal">(leave blank to keep current)</span></label>
-              <input type="text" value={adminForm.newPassword} onChange={AF('newPassword')} placeholder="Enter new password to change" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
-            </div>
+          )}
+
+          <div className="flex items-center gap-3 pt-1">
+            <button type="submit" disabled={saving} className="bg-gray-900 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors disabled:opacity-50">
+              {saving ? 'Saving…' : 'Save Changes'}
+            </button>
+            <button type="button" onClick={toggleActive}
+              className={`px-5 py-2 rounded-lg text-sm font-medium border transition-colors ${company.is_active ? 'border-red-300 text-red-600 hover:bg-red-50' : 'border-green-300 text-green-600 hover:bg-green-50'}`}>
+              {company.is_active ? 'Disable All Logins' : 'Re-enable Logins'}
+            </button>
           </div>
-        )}
+        </form>
+      )}
 
-        <div className="flex items-center gap-3 pt-1">
-          <button type="submit" disabled={saving} className="bg-gray-900 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors disabled:opacity-50">
-            {saving ? 'Saving…' : 'Save Changes'}
-          </button>
-          <button
-            type="button"
-            onClick={toggleActive}
-            className={`px-5 py-2 rounded-lg text-sm font-medium border transition-colors ${company.is_active ? 'border-red-300 text-red-600 hover:bg-red-50' : 'border-green-300 text-green-600 hover:bg-green-50'}`}
-          >
-            {company.is_active ? 'Disable All Logins' : 'Re-enable Logins'}
-          </button>
-        </div>
-      </form>
+      {/* Analytics tab */}
+      {activeTab === 'analytics' && <AnalyticsTab companyId={id} />}
 
-      {/* Create Admin User modal */}
+      {/* Create Admin modal */}
       {showCreateAdmin && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full">
@@ -372,12 +648,8 @@ export default function CompanyDetailPage({ params }: { params: { id: string } }
             <h3 className="font-semibold text-gray-900 mb-2">Disable All Logins?</h3>
             <p className="text-sm text-gray-500 mb-5">All users of <strong>{company.name}</strong> will be blocked from logging in immediately.</p>
             <div className="flex gap-3">
-              <button onClick={confirmDisableAction} className="flex-1 bg-red-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors">
-                Disable
-              </button>
-              <button onClick={() => setConfirmDisable(false)} className="flex-1 border border-gray-300 text-gray-600 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors">
-                Cancel
-              </button>
+              <button onClick={confirmDisableAction} className="flex-1 bg-red-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors">Disable</button>
+              <button onClick={() => setConfirmDisable(false)} className="flex-1 border border-gray-300 text-gray-600 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors">Cancel</button>
             </div>
           </div>
         </div>
