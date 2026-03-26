@@ -6,6 +6,7 @@ import Modal from '@/components/ui/Modal'
 import { useCrud } from '@/hooks/useCrud'
 import { useMe } from '@/hooks/useMe'
 import { useBPForm, BusinessPartnerFormFields } from '@/components/masters/BusinessPartnerForm'
+import { useToast } from '@/contexts/ToastContext'
 
 const STAGE_COLORS: Record<string, string> = {
   Prospect:    'bg-gray-100 text-gray-600',
@@ -57,6 +58,7 @@ const COLS: Column[] = [
 export default function LeadsPage() {
   const crud = useCrud('/api/leads')
   const me = useMe()
+  const { toast } = useToast()
   const isAdmin  = me?.role === 'Administrator'
   const canEdit  = isAdmin || (me?.permissions?.business?.edit   ?? false)
   const canDelete = isAdmin || (me?.permissions?.business?.delete ?? false)
@@ -68,8 +70,8 @@ export default function LeadsPage() {
   const [leadTypes, setLeadTypes] = useState<{ id: string; name: string }[]>([])
 
   useEffect(() => {
-    fetch('/api/masters/lead-types').then(r => r.json()).then(setLeadTypes).catch(() => {})
-  }, [])
+    fetch('/api/masters/lead-types').then(r => r.json()).then(setLeadTypes).catch(() => toast('Failed to load lead types', 'error'))
+  }, [toast])
 
   function openAdd() {
     bp.reset()

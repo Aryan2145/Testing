@@ -6,6 +6,7 @@ import Modal from '@/components/ui/Modal'
 import SearchableSelect from '@/components/ui/SearchableSelect'
 import { useCrud } from '@/hooks/useCrud'
 import { useMe } from '@/hooks/useMe'
+import { useToast } from '@/contexts/ToastContext'
 
 const COLS: Column[] = [
   { key: 'name', label: 'Product Name' },
@@ -21,6 +22,7 @@ type Sub = { id: string; name: string; category_id: string }
 export default function ProductsPage() {
   const crud = useCrud('/api/masters/products')
   const me = useMe()
+  const { toast } = useToast()
   const isAdmin = me?.role === 'Administrator'
   const canEdit = isAdmin || (me?.permissions?.products?.edit ?? false)
   const canDelete = isAdmin || (me?.permissions?.products?.delete ?? false)
@@ -32,9 +34,9 @@ export default function ProductsPage() {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    fetch('/api/masters/product-categories').then(r => r.json()).then(setCats)
-    fetch('/api/masters/product-subcategories').then(r => r.json()).then(setAllSubs)
-  }, [])
+    fetch('/api/masters/product-categories').then(r => r.json()).then(setCats).catch(() => toast('Failed to load product categories. Please refresh.', 'error'))
+    fetch('/api/masters/product-subcategories').then(r => r.json()).then(setAllSubs).catch(() => toast('Failed to load product subcategories. Please refresh.', 'error'))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const filteredSubs = allSubs.filter(s => !form.category_id || s.category_id === form.category_id)
 

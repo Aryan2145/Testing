@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, ReactNode } from 'react'
 import SearchableSelect from '@/components/ui/SearchableSelect'
+import { useToast } from '@/contexts/ToastContext'
 
 type LeadStage = { id: string; name: string; sort_order: number; is_fixed: boolean }
 type LeadTemp  = { id: string; name: string; sort_order: number }
@@ -32,6 +33,7 @@ export type BPFormState = typeof EMPTY_BP_FORM
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
 export function useBPForm() {
+  const { toast } = useToast()
   const [form, setForm] = useState<BPFormState>(EMPTY_BP_FORM)
   const [showMobile2, setShowMobile2] = useState(false)
   const [mobile1Error, setMobile1Error] = useState('')
@@ -43,10 +45,10 @@ export function useBPForm() {
   const [villages,  setVillages]  = useState<VillageItem[]>([])
 
   useEffect(() => {
-    fetch('/api/masters/districts').then(r => r.json()).then(setDistricts)
-    fetch('/api/masters/talukas').then(r => r.json()).then(setTalukas)
-    fetch('/api/masters/villages').then(r => r.json()).then(setVillages)
-  }, [])
+    fetch('/api/masters/districts').then(r => r.json()).then(setDistricts).catch(() => toast('Failed to load location data. Please refresh.', 'error'))
+    fetch('/api/masters/talukas').then(r => r.json()).then(setTalukas).catch(() => toast('Failed to load location data. Please refresh.', 'error'))
+    fetch('/api/masters/villages').then(r => r.json()).then(setVillages).catch(() => toast('Failed to load location data. Please refresh.', 'error'))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const { placeOptions, placeMap } = useMemo(() => {
     const distMap = new Map(districts.map(d => [d.id, d]))
@@ -174,6 +176,7 @@ interface BPFormFieldsProps {
 export function BusinessPartnerFormFields({
   hook, namePlaceholder = 'Account name', requirePlace = false, topSlot, midSlot, showLeadStatus = false,
 }: BPFormFieldsProps) {
+  const { toast } = useToast()
   const {
     form, showMobile2, setShowMobile2, setForm,
     mobile1Error, setMobile1Error,
@@ -186,9 +189,9 @@ export function BusinessPartnerFormFields({
   const [temps, setTemps]    = useState<LeadTemp[]>([])
   useEffect(() => {
     if (!showLeadStatus) return
-    fetch('/api/masters/lead-stages').then(r => r.json()).then(setStages).catch(() => {})
-    fetch('/api/masters/lead-temperatures').then(r => r.json()).then(setTemps).catch(() => {})
-  }, [showLeadStatus])
+    fetch('/api/masters/lead-stages').then(r => r.json()).then(setStages).catch(() => toast('Failed to load lead status options.', 'error'))
+    fetch('/api/masters/lead-temperatures').then(r => r.json()).then(setTemps).catch(() => toast('Failed to load lead status options.', 'error'))
+  }, [showLeadStatus]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>

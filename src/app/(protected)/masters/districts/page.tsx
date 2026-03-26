@@ -6,6 +6,7 @@ import Modal from '@/components/ui/Modal'
 import SearchableSelect from '@/components/ui/SearchableSelect'
 import { useCrud } from '@/hooks/useCrud'
 import { useMe } from '@/hooks/useMe'
+import { useToast } from '@/contexts/ToastContext'
 
 const COLS: Column[] = [
   { key: 'name', label: 'Name' },
@@ -15,6 +16,7 @@ const COLS: Column[] = [
 export default function DistrictsPage() {
   const crud = useCrud('/api/masters/districts')
   const me = useMe()
+  const { toast } = useToast()
   const isAdmin = me?.role === 'Administrator'
   const canEdit = isAdmin || (me?.permissions?.locations?.edit ?? false)
   const canDelete = isAdmin || (me?.permissions?.locations?.delete ?? false)
@@ -26,8 +28,8 @@ export default function DistrictsPage() {
 
   useEffect(() => {
     fetch('/api/masters/states').then(r => r.json()).then((d: { id: string; name: string }[]) =>
-      setStates(d.map(s => ({ value: s.id, label: s.name }))))
-  }, [])
+      setStates(d.map(s => ({ value: s.id, label: s.name })))).catch(() => toast('Failed to load states. Please refresh.', 'error'))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function openAdd() { setEditing(null); setName(''); setStateId(''); setOpen(true) }
   function openEdit(row: Record<string, unknown>) { setEditing(row); setName(String(row.name)); setStateId(String(row.state_id)); setOpen(true) }

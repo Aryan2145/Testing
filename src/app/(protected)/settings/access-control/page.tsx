@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { invalidateMeCache } from '@/hooks/useMe'
+import { useToast } from '@/contexts/ToastContext'
 
 type UserEntry = { id: string; name: string; level: string }
 type VisibilityEntry = { id: string; target_user_id: string; name: string; level: string }
@@ -105,6 +106,7 @@ const PERM_SECTIONS: { key: string; label: string }[] = [
 const EMPTY_PERMS: SectionPerms = { view: false, create: false, edit: false, delete: false, data_scope: 'own' }
 
 function RolesPermissions() {
+  const { toast } = useToast()
   const [roles, setRoles] = useState<Role[]>([])
   const [selectedRole, setSelectedRole] = useState<Role | null>(null)
   const [perms, setPerms] = useState<PermMap>({})
@@ -190,7 +192,7 @@ function RolesPermissions() {
     })
     const data = await r.json()
     setCreating(false)
-    if (!r.ok) { alert(data.error ?? 'Failed to create role'); return }
+    if (!r.ok) { toast(data.error ?? 'Failed to create role', 'error'); return }
     setNewRoleName('')
     setShowNewRole(false)
     const newRole: Role = { id: data.id, name: data.name, is_system: false }
@@ -202,7 +204,7 @@ function RolesPermissions() {
     if (role.is_system) return
     const r = await fetch(`/api/settings/roles/${role.id}`, { method: 'DELETE' })
     const data = await r.json()
-    if (!r.ok) { alert(data.error ?? 'Failed to delete role'); return }
+    if (!r.ok) { toast(data.error ?? 'Failed to delete role', 'error'); return }
     setDeleteConfirm(null)
     setRoles(prev => prev.filter(ro => ro.id !== role.id))
     if (selectedRole?.id === role.id) setSelectedRole(roles.find(ro => ro.is_system) ?? null)
@@ -372,6 +374,7 @@ function RolesPermissions() {
 // Reporting Schema Tab
 // ─────────────────────────────────────────────────────────────────
 function ReportingSchema({ preselectedUserId }: { preselectedUserId: string | null }) {
+  const { toast } = useToast()
   const [allUsers, setAllUsers] = useState<UserEntry[]>([])
   const [userSearch, setUserSearch] = useState('')
   const [selectedUser, setSelectedUser] = useState<UserEntry | null>(null)
@@ -428,6 +431,9 @@ function ReportingSchema({ preselectedUserId }: { preselectedUserId: string | nu
     if (r.ok) {
       await loadVisibility(selectedUser.id)
       setAddSearch('')
+    } else {
+      const data = await r.json()
+      toast(data.error ?? 'Failed to update visibility', 'error')
     }
     setSaved(true)
   }
@@ -436,7 +442,11 @@ function ReportingSchema({ preselectedUserId }: { preselectedUserId: string | nu
     if (!selectedUser) return
     setSaved(false)
     setVisibility(v => v.filter(e => e.id !== entry.id))
-    await fetch(`/api/access-control/visibility?id=${entry.id}`, { method: 'DELETE' })
+    const r = await fetch(`/api/access-control/visibility?id=${entry.id}`, { method: 'DELETE' })
+    if (!r.ok) {
+      const data = await r.json()
+      toast(data.error ?? 'Failed to update visibility', 'error')
+    }
     setSaved(true)
   }
 
@@ -446,6 +456,7 @@ function ReportingSchema({ preselectedUserId }: { preselectedUserId: string | nu
     const r = await fetch('/api/access-control/visibility/bulk-import', { method: 'POST' })
     const data = await r.json()
     setImporting(false)
+    if (!r.ok) { toast(data.error ?? 'Sync failed', 'error'); return }
     setImportMsg(`Synced ${data.inserted ?? 0} rules from hierarchy`)
     loadUsers(null)
     if (selectedUser) loadVisibility(selectedUser.id)

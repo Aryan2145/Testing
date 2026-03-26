@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import RemarksPanel from '@/components/ui/RemarksPanel'
+import { useToast } from '@/contexts/ToastContext'
 
 type Conversation = {
   context_type: string
@@ -65,6 +66,7 @@ function getRedirectPath(conv: Conversation, currentUserId: string | null) {
 
 export default function ConversationsPage() {
   const router = useRouter()
+  const { toast } = useToast()
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [loading, setLoading] = useState(true)
   const [users, setUsers] = useState<UserOption[]>([])
@@ -90,8 +92,9 @@ export default function ConversationsPage() {
     if (status !== 'all') p.set('status', status)
     const r = await fetch(`/api/conversations?${p}`)
     if (r.ok) setConversations(await r.json())
+    else toast('Failed to load conversations', 'error')
     setLoading(false)
-  }, [section, userId, status])
+  }, [section, userId, status, toast])
 
   useEffect(() => { load() }, [load])
 
@@ -99,7 +102,7 @@ export default function ConversationsPage() {
     // Load subordinates for user filter
     fetch('/api/review/summary-cards').then(r => r.json()).then((cards: { id: string; name: string }[]) => {
       if (Array.isArray(cards)) setUsers(cards)
-    }).catch(() => {})
+    }).catch(() => toast('Failed to load user list', 'error'))
     // Load current user id
     fetch('/api/auth/me').then(r => r.json()).then(d => {
       if (d?.userId) setCurrentUserId(d.userId)

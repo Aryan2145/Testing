@@ -88,14 +88,14 @@ function CreateOrderModal({
   useEffect(() => {
     fetch('/api/masters/products').then(r => r.json()).then(d => {
       setProducts(Array.isArray(d) ? d : [])
-    }).catch(() => {})
+    }).catch(() => toast('Failed to load products', 'error'))
 
     if (hasSubordinates) {
       fetch('/api/orders/team').then(r => r.json()).then(d => {
         const team: TeamMember[] = Array.isArray(d) ? d : []
         setSalesExecs(team)
         if (team.length > 0) setSalesUserId(team[0].id)
-      }).catch(() => {})
+      }).catch(() => toast('Failed to load team members', 'error'))
     }
   }, [hasSubordinates])
 
@@ -531,16 +531,16 @@ export default function OrdersPage() {
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(d => {
       setHasSubordinates(d.hasSubordinates ?? false)
-    }).catch(() => {})
-  }, [])
+    }).catch(() => toast('Failed to load user settings', 'error'))
+  }, [toast])
 
   useEffect(() => {
     if (hasSubordinates) {
       fetch('/api/orders/team').then(r => r.json()).then(d => {
         setTeamMembers(Array.isArray(d) ? d : [])
-      }).catch(() => {})
+      }).catch(() => toast('Failed to load team members', 'error'))
     }
-  }, [hasSubordinates])
+  }, [hasSubordinates, toast])
 
   const loadOrders = useCallback(async () => {
     setLoading(true)

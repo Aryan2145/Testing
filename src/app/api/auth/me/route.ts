@@ -21,23 +21,31 @@ export async function GET() {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const supabase = createServerSupabase()
+  const tid = getTenantId()
+
+  // Fetch tenant name for all user types
+  const { data: tenant } = await supabase
+    .from('tenants')
+    .select('name')
+    .eq('id', tid)
+    .single()
+  const tenantName: string = tenant?.name ?? ''
+
   if (user.role === 'SuperAdmin') {
-    return NextResponse.json({ ...user, hasSubordinates: false, permissions: allFalse })
+    return NextResponse.json({ ...user, tenantName, hasSubordinates: false, permissions: allFalse })
   }
 
-  const supabase = createServerSupabase()
-
   if (user.role === 'Administrator') {
-    if (!user.userId) return NextResponse.json({ ...user, hasSubordinates: false, permissions: allTrue })
+    if (!user.userId) return NextResponse.json({ ...user, tenantName, hasSubordinates: false, permissions: allTrue })
     const { count } = await supabase
       .from('user_visibility')
       .select('id', { count: 'exact', head: true })
       .eq('viewer_user_id', user.userId)
-    return NextResponse.json({ ...user, hasSubordinates: (count ?? 0) > 0, permissions: allTrue })
+    return NextResponse.json({ ...user, tenantName, hasSubordinates: (count ?? 0) > 0, permissions: allTrue })
   }
 
   // Standard user — fetch hasSubordinates and role_permissions in parallel
-  const tid = getTenantId()
   const [visResult, permResult] = await Promise.all([
     user.userId
       ? supabase.from('user_visibility').select('id', { count: 'exact', head: true }).eq('viewer_user_id', user.userId)
@@ -62,6 +70,7 @@ export async function GET() {
 
   return NextResponse.json({
     ...user,
+    tenantName,
     hasSubordinates: ((visResult as { count: number | null }).count ?? 0) > 0,
     permissions,
   })

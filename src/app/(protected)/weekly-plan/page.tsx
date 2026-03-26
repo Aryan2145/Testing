@@ -176,7 +176,7 @@ function MyPlanTab({ userId }: { userId: string | null }) {
   useEffect(() => {
     fetch('/api/masters/territory-mapping/places').then(r => r.json()).then(d => {
       if (Array.isArray(d)) setVillages(d)
-    }).catch(() => {})
+    }).catch(() => toast('Failed to load location data', 'error'))
   }, [])
 
   const loadPlan = useCallback(async (clearCache = false) => {
@@ -650,11 +650,12 @@ function MyPlanTab({ userId }: { userId: string | null }) {
 
 // ---- Main Page ----
 export default function WeeklyPlanPage() {
+  const { toast } = useToast()
   const [me, setMe] = useState<{ userId: string | null; hasSubordinates: boolean } | null>(null)
 
   useEffect(() => {
-    fetch('/api/auth/me').then(r => r.json()).then(d => setMe({ userId: d.userId, hasSubordinates: d.hasSubordinates })).catch(() => {})
-  }, [])
+    fetch('/api/auth/me').then(r => r.json()).then(d => setMe({ userId: d.userId, hasSubordinates: d.hasSubordinates })).catch(() => toast('Failed to load user settings', 'error'))
+  }, [toast])
 
   return (
     <div className="flex flex-col h-full">

@@ -7,6 +7,7 @@ import SearchableSelect from '@/components/ui/SearchableSelect'
 import StatusBadge from '@/components/ui/StatusBadge'
 import { useCrud } from '@/hooks/useCrud'
 import { useMe } from '@/hooks/useMe'
+import { useToast } from '@/contexts/ToastContext'
 
 type Level = { id: string; name: string; level_no: number }
 type Dept = { id: string; name: string }
@@ -45,6 +46,7 @@ const INIT = { name: '', email: '', contact: '', password: '', department_id: ''
 export default function UsersPage() {
   const crud = useCrud('/api/masters/users', { scope: 'manage' })
   const me = useMe()
+  const { toast } = useToast()
   const isAdmin = me?.role === 'Administrator'
   const canEdit = isAdmin || (me?.permissions?.users?.edit ?? false)
   const canDelete = isAdmin || (me?.permissions?.users?.delete ?? false)
@@ -90,16 +92,16 @@ export default function UsersPage() {
   }
 
   function refreshLists() {
-    fetch('/api/masters/users').then(r => r.json()).then(d => setAllUsers(Array.isArray(d) ? d : []))
-    fetch('/api/masters/users/license').then(r => r.json()).then(setLicense)
+    fetch('/api/masters/users').then(r => r.json()).then(d => setAllUsers(Array.isArray(d) ? d : [])).catch(() => toast('Failed to load user data. Please refresh.', 'error'))
+    fetch('/api/masters/users/license').then(r => r.json()).then(setLicense).catch(() => toast('Failed to load user data. Please refresh.', 'error'))
   }
 
   useEffect(() => {
-    fetch('/api/masters/levels').then(r => r.json()).then(d => setLevels(Array.isArray(d) ? d : []))
-    fetch('/api/masters/departments').then(r => r.json()).then(d => setDepts(Array.isArray(d) ? d : []))
-    fetch('/api/masters/designations').then(r => r.json()).then(d => setAllDesigs(Array.isArray(d) ? d : []))
+    fetch('/api/masters/levels').then(r => r.json()).then(d => setLevels(Array.isArray(d) ? d : [])).catch(() => toast('Failed to load user data. Please refresh.', 'error'))
+    fetch('/api/masters/departments').then(r => r.json()).then(d => setDepts(Array.isArray(d) ? d : [])).catch(() => toast('Failed to load user data. Please refresh.', 'error'))
+    fetch('/api/masters/designations').then(r => r.json()).then(d => setAllDesigs(Array.isArray(d) ? d : [])).catch(() => toast('Failed to load user data. Please refresh.', 'error'))
     refreshLists()
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const atLimit = license !== null && license.limit !== null && license.used >= license.limit
 

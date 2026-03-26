@@ -6,6 +6,7 @@ import Modal from '@/components/ui/Modal'
 import SearchableSelect from '@/components/ui/SearchableSelect'
 import { useCrud } from '@/hooks/useCrud'
 import { useMe } from '@/hooks/useMe'
+import { useToast } from '@/contexts/ToastContext'
 
 const COLS: Column[] = [
   { key: 'name', label: 'Sub-Category Name' },
@@ -15,6 +16,7 @@ const COLS: Column[] = [
 export default function ProductSubcategoriesPage() {
   const crud = useCrud('/api/masters/product-subcategories')
   const me = useMe()
+  const { toast } = useToast()
   const isAdmin = me?.role === 'Administrator'
   const canEdit = isAdmin || (me?.permissions?.products?.edit ?? false)
   const canDelete = isAdmin || (me?.permissions?.products?.delete ?? false)
@@ -26,8 +28,8 @@ export default function ProductSubcategoriesPage() {
 
   useEffect(() => {
     fetch('/api/masters/product-categories').then(r => r.json()).then((d: { id: string; name: string }[]) =>
-      setCats(d.map(x => ({ value: x.id, label: x.name }))))
-  }, [])
+      setCats(d.map(x => ({ value: x.id, label: x.name })))).catch(() => toast('Failed to load product categories. Please refresh.', 'error'))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function openAdd() { setEditing(null); setName(''); setCatId(''); setOpen(true) }
   function openEdit(row: Record<string, unknown>) { setEditing(row); setName(String(row.name)); setCatId(String(row.category_id)); setOpen(true) }

@@ -11,6 +11,7 @@ export type Me = {
   name: string
   phone: string
   role: string
+  tenantName: string
   hasSubordinates: boolean
   permissions: MePermissions
 }
@@ -31,6 +32,7 @@ export function useMe(): Me | null {
         _cache = d
         setMe(d)
       })
+      .catch(() => {})
   }, [])
   return me
 }

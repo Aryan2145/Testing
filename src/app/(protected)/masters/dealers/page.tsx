@@ -7,6 +7,7 @@ import SearchableSelect from '@/components/ui/SearchableSelect'
 import { useCrud } from '@/hooks/useCrud'
 import { useMe } from '@/hooks/useMe'
 import { useBPForm, BusinessPartnerFormFields } from '@/components/masters/BusinessPartnerForm'
+import { useToast } from '@/contexts/ToastContext'
 
 const PAGE_SIZE = 15
 
@@ -36,6 +37,7 @@ type Opt = { value: string; label: string }
 export default function DealersPage() {
   const crud = useCrud('/api/masters/dealers')
   const me = useMe()
+  const { toast } = useToast()
   const isAdmin  = me?.role === 'Administrator'
   const canEdit  = isAdmin || (me?.permissions?.business?.edit   ?? false)
   const canDelete = isAdmin || (me?.permissions?.business?.delete ?? false)
@@ -62,7 +64,8 @@ export default function DealersPage() {
   useEffect(() => {
     fetch('/api/masters/distributors').then(r => r.json())
       .then((d: { id: string; name: string }[]) => setDistributors(d.map(x => ({ value: x.id, label: x.name }))))
-  }, [])
+      .catch(() => toast('Failed to load distributors. Please refresh.', 'error'))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function openAdd()  { bp.reset();    setEditing(null); setOpen(true) }
   function openEdit(row: Record<string, unknown>) { bp.reset(row); setEditing(row); setOpen(true) }
@@ -99,6 +102,9 @@ export default function DealersPage() {
       setDistributors(prev => [...prev, { value: created.id, label: created.name }].sort((a, b) => a.label.localeCompare(b.label)))
       bp.setF('distributor_id')(created.id)
       setNewDistOpen(false)
+    } else {
+      const data = await res.json()
+      toast(data.error ?? 'Failed to create distributor', 'error')
     }
   }
 

@@ -6,6 +6,7 @@ import Modal from '@/components/ui/Modal'
 import SearchableSelect from '@/components/ui/SearchableSelect'
 import { useCrud } from '@/hooks/useCrud'
 import { useMe } from '@/hooks/useMe'
+import { useToast } from '@/contexts/ToastContext'
 
 const COLS: Column[] = [
   { key: 'name', label: 'Name' },
@@ -15,6 +16,7 @@ const COLS: Column[] = [
 export default function TalukasPage() {
   const crud = useCrud('/api/masters/talukas')
   const me = useMe()
+  const { toast } = useToast()
   const isAdmin = me?.role === 'Administrator'
   const canEdit = isAdmin || (me?.permissions?.locations?.edit ?? false)
   const canDelete = isAdmin || (me?.permissions?.locations?.delete ?? false)
@@ -26,8 +28,8 @@ export default function TalukasPage() {
 
   useEffect(() => {
     fetch('/api/masters/districts').then(r => r.json()).then((d: { id: string; name: string }[]) =>
-      setDistricts(d.map(x => ({ value: x.id, label: x.name }))))
-  }, [])
+      setDistricts(d.map(x => ({ value: x.id, label: x.name })))).catch(() => toast('Failed to load districts. Please refresh.', 'error'))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function openAdd() { setEditing(null); setName(''); setDistrictId(''); setOpen(true) }
   function openEdit(row: Record<string, unknown>) { setEditing(row); setName(String(row.name)); setDistrictId(String(row.district_id)); setOpen(true) }

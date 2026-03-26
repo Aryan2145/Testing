@@ -157,7 +157,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           </div>
           <div>
             <p className="font-bold text-gray-900 text-sm leading-tight">My Prosys SFA</p>
-            <p className="text-xs text-teal-600 font-medium">Nuetech Solar Systems</p>
+            <p className="text-xs text-teal-600 font-medium">{me?.tenantName ?? ''}</p>
           </div>
         </div>
       </div>

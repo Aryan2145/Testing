@@ -410,6 +410,7 @@ function VisitCard({ visit, onStart, onStop, onDelete, onOrderEntry, onRemarks, 
 
 // ---- Add Meeting Modal ----
 function AddMeetingModal({ onClose, onAdd }: { onClose: () => void; onAdd: (v: Partial<Visit>) => void }) {
+  const { toast } = useToast()
   const [leadTypes, setLeadTypes] = useState<{ id: string; name: string }[]>([])
   const [visitType, setVisitType] = useState('')
   const [mode, setMode] = useState<'existing' | 'lead' | 'new_prospect'>('existing')
@@ -435,7 +436,7 @@ function AddMeetingModal({ onClose, onAdd }: { onClose: () => void; onAdd: (v: P
     fetch('/api/masters/lead-types').then(r => r.json()).then((d: { id: string; name: string }[]) => {
       setLeadTypes(Array.isArray(d) ? d : [])
       if (d.length > 0) setVisitType(d[0].name)
-    }).catch(() => {})
+    }).catch(() => toast('Failed to load visit types', 'error'))
     // Load place options for new prospect
     Promise.all([
       fetch('/api/masters/districts').then(r => r.json()),
@@ -463,7 +464,7 @@ function AddMeetingModal({ onClose, onAdd }: { onClose: () => void; onAdd: (v: P
       }
       setPlaceOptions(opts)
       setPlaceMap(pm)
-    }).catch(() => {})
+    }).catch(() => toast('Failed to load location data', 'error'))
   }, [])
 
   useEffect(() => {
@@ -649,6 +650,7 @@ function AddMeetingModal({ onClose, onAdd }: { onClose: () => void; onAdd: (v: P
 
 // ---- Add Expense Modal ----
 function AddExpenseModal({ onClose, onAdd }: { onClose: () => void; onAdd: (e: Partial<Expense>) => void }) {
+  const { toast } = useToast()
   const [category, setCategory] = useState<string>('')
   const [amount, setAmount] = useState('')
   const [notes, setNotes] = useState('')
@@ -661,7 +663,7 @@ function AddExpenseModal({ onClose, onAdd }: { onClose: () => void; onAdd: (e: P
   useEffect(() => {
     fetch('/api/masters/expense-categories').then(r => r.json()).then(d => {
       if (Array.isArray(d)) setExpenseCategories(d)
-    }).catch(() => {})
+    }).catch(() => toast('Failed to load expense categories', 'error'))
   }, [])
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -780,7 +782,7 @@ function OrderEntryModal({ visit, onClose, onSaved }: { visit: Visit; onClose: (
     // Load products
     fetch('/api/masters/products').then(r => r.json()).then(d => {
       setProducts(Array.isArray(d) ? d : [])
-    }).catch(() => {}).finally(() => {})
+    }).catch(() => toast('Failed to load products', 'error')).finally(() => {})
 
     // Load existing order
     fetch(`/api/orders?visitId=${visit.id}`).then(r => r.json()).then(d => {
@@ -1249,10 +1251,10 @@ function DailyActivityInner() {
 
   // Load plan + expenses for Summary tab
   useEffect(() => {
-    fetch(`/api/weekly-plans/day?date=${selectedDate}`).then(r => r.json()).then(d => setPlanDay(d)).catch(() => {})
+    fetch(`/api/weekly-plans/day?date=${selectedDate}`).then(r => r.json()).then(d => setPlanDay(d)).catch(() => toast('Failed to load plan data', 'error'))
     fetch(`/api/expenses?date=${selectedDate}`).then(r => r.json()).then(d => {
       if (Array.isArray(d)) setSummaryExpenses(d)
-    }).catch(() => {})
+    }).catch(() => toast('Failed to load expenses', 'error'))
   }, [selectedDate])
 
   const isFuture = selectedDate > toDateStr(new Date())
