@@ -18,7 +18,8 @@ export async function GET(req: NextRequest) {
   if (q) query = query.or(`name.ilike.%${q}%,email.ilike.%${q}%,contact.ilike.%${q}%`)
 
   // scope=manage: only return users at lower authority levels (higher level_no)
-  if (scope === 'manage' && user.userId) {
+  // Administrators always see all users regardless of scope
+  if (scope === 'manage' && user.userId && user.role !== 'Administrator') {
     const { data: actingUser } = await supabase
       .from('users').select('levels(level_no)').eq('id', user.userId).single()
     const actingLevelNo = (actingUser?.levels as unknown as { level_no: number } | null)?.level_no ?? null

@@ -8,9 +8,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   const user = await requireUser()
   if (!await checkPermission(user, 'organization', 'edit')) return forbidden()
   const body = await req.json()
+  // level_no is immutable — strip it from any update payload
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { level_no, ...safeBody } = body
   const supabase = createServerSupabase()
   const { data, error } = await supabase
-    .from('levels').update(body).eq('id', params.id).eq('tenant_id', getTenantId()).select().single()
+    .from('levels').update(safeBody).eq('id', params.id).eq('tenant_id', getTenantId()).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)
 }
