@@ -58,7 +58,6 @@ export function useCrud<T extends Record<string, unknown>>(apiPath: string, quer
     const data = await res.json()
     if (!res.ok) {
       const msg: string = data.error ?? 'Delete failed'
-      toast(msg, 'error')
       return msg
     }
     toast('Deleted successfully')
