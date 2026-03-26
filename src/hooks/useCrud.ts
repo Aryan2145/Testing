@@ -53,13 +53,17 @@ export function useCrud<T extends Record<string, unknown>>(apiPath: string, quer
     return true
   }
 
-  async function remove(id: string): Promise<boolean> {
+  async function remove(id: string): Promise<string | null> {
     const res = await fetch(`${apiPath}/${id}`, { method: 'DELETE' })
     const data = await res.json()
-    if (!res.ok) { toast(data.error ?? 'Delete failed', 'error'); return false }
+    if (!res.ok) {
+      const msg: string = data.error ?? 'Delete failed'
+      toast(msg, 'error')
+      return msg
+    }
     toast('Deleted successfully')
     await fetchRows(search)
-    return true
+    return null
   }
 
   const totalPages = Math.max(1, Math.ceil(allRows.length / PAGE_SIZE))

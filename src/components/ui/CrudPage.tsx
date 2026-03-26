@@ -1,6 +1,6 @@
 'use client'
 
-import { ReactNode, useState, useEffect, useRef } from 'react'
+import { ReactNode, useState, useEffect, useRef, useCallback } from 'react'
 import Toggle from './Toggle'
 import Pagination from './Pagination'
 
@@ -25,7 +25,7 @@ interface CrudPageProps {
   onPage: (p: number) => void
   onAdd?: () => void
   onEdit?: (row: Record<string, unknown>) => void
-  onDelete?: (row: Record<string, unknown>) => void
+  onDelete?: (row: Record<string, unknown>) => Promise<string | null | void> | void
   rowActions?: (row: Record<string, unknown>) => ReactNode
   onToggleActive?: (row: Record<string, unknown>, val: boolean) => void
   /** When provided, rows get a drag handle and can be reordered. Receives the full new order. */
@@ -43,6 +43,23 @@ export default function CrudPage({
   // Local ordered rows for drag-and-drop (only used when onReorder is set)
   const [orderedRows, setOrderedRows] = useState<Record<string, unknown>[]>(rows)
   useEffect(() => { setOrderedRows(rows) }, [rows])
+
+  // Delete error banner
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [errorKey, setErrorKey] = useState(0)
+  const errTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const showDeleteError = useCallback((msg: string) => {
+    if (errTimerRef.current) clearTimeout(errTimerRef.current)
+    setDeleteError(msg)
+    setErrorKey(k => k + 1)
+    errTimerRef.current = setTimeout(() => setDeleteError(null), 5000)
+  }, [])
+
+  const clearDeleteError = useCallback(() => {
+    if (errTimerRef.current) clearTimeout(errTimerRef.current)
+    setDeleteError(null)
+  }, [])
 
   const dragIdx    = useRef<number | null>(null)
   const dragOverIdx = useRef<number | null>(null)
@@ -99,6 +116,22 @@ export default function CrudPage({
       </div>
       {filterBar && <div className="mb-3">{filterBar}</div>}
 
+      {deleteError && (
+        <div key={errorKey} className="mb-4 bg-red-50 border border-red-200 rounded-lg overflow-hidden">
+          <div className="flex items-start gap-3 px-4 py-3">
+            <p className="text-red-800 text-sm font-medium flex-1 leading-snug">{deleteError}</p>
+            <button
+              onClick={clearDeleteError}
+              className="text-red-400 hover:text-red-700 text-xl leading-none flex-shrink-0 transition-colors"
+              aria-label="Close"
+            >×</button>
+          </div>
+          <div className="h-1 bg-red-100">
+            <div className="bg-red-500 h-full" style={{ animation: 'toast-progress 5s linear forwards' }} />
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-100">
@@ -150,7 +183,12 @@ export default function CrudPage({
                     {rowActions?.(row)}
                     {onDelete && (
                       <button
-                        onClick={() => { if (confirm('Delete this record?')) onDelete(row) }}
+                        onClick={async () => {
+                          if (confirm('Delete this record?')) {
+                            const result = await onDelete(row)
+                            if (typeof result === 'string' && result) showDeleteError(result)
+                          }
+                        }}
                         className="text-red-500 hover:text-red-700 text-xs font-medium"
                       >
                         Delete
