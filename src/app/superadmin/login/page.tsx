@@ -43,8 +43,9 @@ export default function SuperAdminLogin() {
             <div className="bg-red-50 text-red-700 text-sm px-3 py-2 rounded-lg">{error}</div>
           )}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+            <label htmlFor="sa-phone" className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
             <input
+              id="sa-phone" name="phone"
               type="tel"
               value={form.phone}
               onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
@@ -54,9 +55,10 @@ export default function SuperAdminLogin() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <label htmlFor="sa-password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
             <div className="relative">
               <input
+                id="sa-password" name="password"
                 type={showPassword ? 'text' : 'password'}
                 value={form.password}
                 onChange={e => setForm(f => ({ ...f, password: e.target.value }))}

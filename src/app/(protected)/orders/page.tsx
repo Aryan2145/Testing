@@ -223,8 +223,8 @@ function CreateOrderModal({
 
               {/* Entity search */}
               <div className="relative">
-                <label className="block text-xs text-gray-500 mb-1">{entityType} <span className="text-red-500">*</span></label>
-                <input type="text" value={entitySearch}
+                <label htmlFor="order-entity-search" className="block text-xs text-gray-500 mb-1">{entityType} <span className="text-red-500">*</span></label>
+                <input id="order-entity-search" name="entity_search" type="text" value={entitySearch}
                   onChange={e => { setEntitySearch(e.target.value); setSelectedEntity(null) }}
                   onBlur={() => setTimeout(() => setEntityOpen(false), 150)}
                   placeholder={`Search ${entityType.toLowerCase()}...`}
@@ -247,7 +247,7 @@ function CreateOrderModal({
               {/* Area/Territory — auto-filled from dealer's district */}
               {selectedEntity?.territory && (
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Area / Territory</label>
+                  <p className="block text-xs text-gray-500 mb-1">Area / Territory</p>
                   <input type="text" value={selectedEntity.territory} readOnly
                     className="w-full border border-gray-100 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-600 cursor-not-allowed" />
                 </div>
@@ -256,30 +256,30 @@ function CreateOrderModal({
               <div className="grid grid-cols-2 gap-3">
                 {/* Sales Executive */}
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Sales Executive <span className="text-red-500">*</span></label>
+                  <label htmlFor="order-sales-exec" className="block text-xs text-gray-500 mb-1">Sales Executive <span className="text-red-500">*</span></label>
                   {hasSubordinates ? (
-                    <select value={salesUserId} onChange={e => setSalesUserId(e.target.value)}
+                    <select id="order-sales-exec" name="sales_user_id" value={salesUserId} onChange={e => setSalesUserId(e.target.value)}
                       className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
                       {salesExecs.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                     </select>
                   ) : (
-                    <input type="text" value="You" readOnly
+                    <input id="order-sales-exec" type="text" value="You" readOnly
                       className="w-full border border-gray-100 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-600 cursor-not-allowed" />
                   )}
                 </div>
 
                 {/* Order Date */}
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Order Date <span className="text-red-500">*</span></label>
-                  <input type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)}
+                  <label htmlFor="order-date" className="block text-xs text-gray-500 mb-1">Order Date <span className="text-red-500">*</span></label>
+                  <input id="order-date" name="order_date" type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)}
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
 
               {/* Status */}
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Order Status <span className="text-red-500">*</span></label>
-                <select value={status} onChange={e => setStatus(e.target.value as typeof status)}
+                <label htmlFor="order-status" className="block text-xs text-gray-500 mb-1">Order Status <span className="text-red-500">*</span></label>
+                <select id="order-status" name="status" value={status} onChange={e => setStatus(e.target.value as typeof status)}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
                   <option value="Draft">Draft</option>
                   <option value="Submitted">Submitted</option>

@@ -62,35 +62,35 @@ export default function NewCompanyPage() {
         <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
           <h2 className="font-medium text-gray-900">Company Details</h2>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Company Name <span className="text-red-500">*</span></label>
-            <input type="text" value={form.name} onChange={F('name')} placeholder="e.g. Acme Corp Pvt Ltd" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+            <label htmlFor="new-co-name" className="block text-sm font-medium text-gray-700 mb-1">Company Name <span className="text-red-500">*</span></label>
+            <input id="new-co-name" name="name" type="text" value={form.name} onChange={F('name')} placeholder="e.g. Acme Corp Pvt Ltd" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input type="email" value={form.email} onChange={F('email')} placeholder="company@example.com" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              <label htmlFor="new-co-email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input id="new-co-email" name="email" type="email" value={form.email} onChange={F('email')} placeholder="company@example.com" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-              <input type="tel" value={form.phone} onChange={F('phone')} placeholder="10-digit number" maxLength={10} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              <label htmlFor="new-co-phone" className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+              <input id="new-co-phone" name="phone" type="tel" value={form.phone} onChange={F('phone')} placeholder="10-digit number" maxLength={10} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-            <textarea value={form.address} onChange={F('address')} rows={2} placeholder="Company address" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none" />
+            <label htmlFor="new-co-address" className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+            <textarea id="new-co-address" name="address" value={form.address} onChange={F('address')} rows={2} placeholder="Company address" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">GSTIN</label>
-            <input type="text" value={form.gstin} onChange={F('gstin')} placeholder="GST Number (optional)" maxLength={15} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 uppercase" />
+            <label htmlFor="new-co-gstin" className="block text-sm font-medium text-gray-700 mb-1">GSTIN</label>
+            <input id="new-co-gstin" name="gstin" type="text" value={form.gstin} onChange={F('gstin')} placeholder="GST Number (optional)" maxLength={15} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 uppercase" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">User License Count</label>
-              <input type="number" value={form.license_count} onChange={F('license_count')} min={1} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              <label htmlFor="new-co-license-count" className="block text-sm font-medium text-gray-700 mb-1">User License Count</label>
+              <input id="new-co-license-count" name="license_count" type="number" value={form.license_count} onChange={F('license_count')} min={1} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Payment Due Date</label>
-              <input type="date" value={form.payment_due_date} onChange={F('payment_due_date')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              <label htmlFor="new-co-due-date" className="block text-sm font-medium text-gray-700 mb-1">Payment Due Date</label>
+              <input id="new-co-due-date" name="payment_due_date" type="date" value={form.payment_due_date} onChange={F('payment_due_date')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
             </div>
           </div>
         </div>
@@ -102,22 +102,22 @@ export default function NewCompanyPage() {
             <p className="text-xs text-gray-500 mt-0.5">This user will be the Administrator for the company</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Name <span className="text-red-500">*</span></label>
-            <input type="text" value={form.adminName} onChange={F('adminName')} placeholder="Admin's full name" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+            <label htmlFor="new-co-admin-name" className="block text-sm font-medium text-gray-700 mb-1">Name <span className="text-red-500">*</span></label>
+            <input id="new-co-admin-name" name="adminName" type="text" value={form.adminName} onChange={F('adminName')} placeholder="Admin's full name" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Phone <span className="text-red-500">*</span></label>
-              <input type="tel" value={form.adminPhone} onChange={F('adminPhone')} placeholder="Login credential" maxLength={10} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              <label htmlFor="new-co-admin-phone" className="block text-sm font-medium text-gray-700 mb-1">Phone <span className="text-red-500">*</span></label>
+              <input id="new-co-admin-phone" name="adminPhone" type="tel" value={form.adminPhone} onChange={F('adminPhone')} placeholder="Login credential" maxLength={10} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input type="email" value={form.adminEmail} onChange={F('adminEmail')} placeholder="admin@company.com" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+              <label htmlFor="new-co-admin-email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input id="new-co-admin-email" name="adminEmail" type="email" value={form.adminEmail} onChange={F('adminEmail')} placeholder="admin@company.com" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password <span className="text-red-500">*</span></label>
-            <input type="text" value={form.adminPassword} onChange={F('adminPassword')} placeholder="Set a strong password" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
+            <label htmlFor="new-co-admin-password" className="block text-sm font-medium text-gray-700 mb-1">Password <span className="text-red-500">*</span></label>
+            <input id="new-co-admin-password" name="adminPassword" type="text" value={form.adminPassword} onChange={F('adminPassword')} placeholder="Set a strong password" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900" />
           </div>
         </div>
 

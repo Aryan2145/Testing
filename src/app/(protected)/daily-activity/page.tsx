@@ -515,8 +515,8 @@ function AddMeetingModal({ onClose, onAdd }: { onClose: () => void; onAdd: (v: P
         <div className="px-5 py-4 space-y-4">
           {/* Step 1: Type */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Lead Type</label>
-            <select value={visitType} onChange={e => setVisitType(e.target.value)}
+            <label htmlFor="da-lead-type" className="block text-sm font-medium text-gray-700 mb-1">Lead Type</label>
+            <select id="da-lead-type" name="visit_type" value={visitType} onChange={e => setVisitType(e.target.value)}
               className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
               <option value="">Select type…</option>
               {leadTypes.map(t => (
@@ -527,7 +527,7 @@ function AddMeetingModal({ onClose, onAdd }: { onClose: () => void; onAdd: (v: P
 
           {/* Step 2: Mode */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Record Type</label>
+            <p className="block text-sm font-medium text-gray-700 mb-2">Record Type</p>
             <div className="grid grid-cols-3 gap-2">
               {(['existing', 'lead', 'new_prospect'] as const).map(m => (
                 <button key={m} onClick={() => setMode(m)}
@@ -541,7 +541,7 @@ function AddMeetingModal({ onClose, onAdd }: { onClose: () => void; onAdd: (v: P
           {/* Step 3: Conditional content */}
           {mode !== 'new_prospect' ? (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="da-entity-search" className="block text-sm font-medium text-gray-700 mb-1">
                 Select {mode === 'lead' ? 'Lead' : visitType || 'Record'}
               </label>
               {entLoading ? (
@@ -549,6 +549,8 @@ function AddMeetingModal({ onClose, onAdd }: { onClose: () => void; onAdd: (v: P
               ) : (
                 <div className="relative">
                   <input
+                    id="da-entity-search"
+                    name="entity_query"
                     type="text"
                     value={entityQuery}
                     onChange={e => { setEntityQuery(e.target.value); setEntityId(''); setEntityDropOpen(true) }}
@@ -587,19 +589,21 @@ function AddMeetingModal({ onClose, onAdd }: { onClose: () => void; onAdd: (v: P
           ) : (
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Name <span className="text-red-500">*</span></label>
-                <input type="text" value={npName} onChange={e => setNpName(e.target.value)} placeholder="Prospect name"
+                <label htmlFor="da-np-name" className="block text-sm font-medium text-gray-700 mb-1">Name <span className="text-red-500">*</span></label>
+                <input id="da-np-name" name="np_name" type="text" value={npName} onChange={e => setNpName(e.target.value)} placeholder="Prospect name"
                   className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Mobile</label>
-                <input type="tel" value={npMobile} onChange={e => setNpMobile(e.target.value)} placeholder="10-digit number" maxLength={10}
+                <label htmlFor="da-np-mobile" className="block text-sm font-medium text-gray-700 mb-1">Mobile</label>
+                <input id="da-np-mobile" name="np_mobile" type="tel" value={npMobile} onChange={e => setNpMobile(e.target.value)} placeholder="10-digit number" maxLength={10}
                   className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Place</label>
+                <label htmlFor="da-np-place" className="block text-sm font-medium text-gray-700 mb-1">Place</label>
                 <div className="relative">
                   <input
+                    id="da-np-place"
+                    name="np_place"
                     type="text"
                     value={placeQuery}
                     onChange={e => { setPlaceQuery(e.target.value); setNpPlace(''); setPlaceDropOpen(true) }}
@@ -710,27 +714,27 @@ function AddExpenseModal({ onClose, onAdd }: { onClose: () => void; onAdd: (e: P
         </div>
         <div className="px-5 py-4 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Category <span className="text-red-500">*</span></label>
-            <select value={category} onChange={e => setCategory(e.target.value)}
+            <label htmlFor="da-expense-category" className="block text-sm font-medium text-gray-700 mb-1">Category <span className="text-red-500">*</span></label>
+            <select id="da-expense-category" name="category" value={category} onChange={e => setCategory(e.target.value)}
               className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
               <option value="">Select category…</option>
               {expenseCategories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Amount (₹) <span className="text-red-500">*</span></label>
-            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} min="0.01" step="0.01"
+            <label htmlFor="da-expense-amount" className="block text-sm font-medium text-gray-700 mb-1">Amount (₹) <span className="text-red-500">*</span></label>
+            <input id="da-expense-amount" name="amount" type="number" value={amount} onChange={e => setAmount(e.target.value)} min="0.01" step="0.01"
               placeholder="0.00"
               className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-            <input type="text" value={notes} onChange={e => setNotes(e.target.value)}
+            <label htmlFor="da-expense-notes" className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+            <input id="da-expense-notes" name="notes" type="text" value={notes} onChange={e => setNotes(e.target.value)}
               placeholder="Optional description"
               className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Receipt Photo</label>
+            <p className="block text-sm font-medium text-gray-700 mb-1">Receipt Photo</p>
             {photoPreview ? (
               <div className="relative w-full">
                 <img src={photoPreview} alt="Receipt preview" className="w-full max-h-48 object-contain rounded-xl border border-gray-200 bg-gray-50" />

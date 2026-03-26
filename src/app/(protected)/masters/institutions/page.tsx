@@ -72,8 +72,8 @@ export default function InstitutionsPage() {
           namePlaceholder="Institution / Consumer name"
           topSlot={
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Category <span className="text-red-500">*</span></label>
-              <select value={bp.form.type || 'Institution'} onChange={bp.F('type')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+              <label htmlFor="institution-category" className="block text-sm font-medium text-gray-700 mb-1">Category <span className="text-red-500">*</span></label>
+              <select id="institution-category" name="type" value={bp.form.type || 'Institution'} onChange={bp.F('type')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
                 <option value="Institution">Institution</option>
                 <option value="End Consumer">End Consumer</option>
               </select>

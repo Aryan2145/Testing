@@ -61,14 +61,14 @@ export default function LevelsPage() {
         onDelete={canDelete ? r => crud.remove(r.id as string) : undefined} />
       <Modal title={editing ? 'Edit Level' : 'Add Level'} isOpen={open} onClose={() => setOpen(false)} onSave={handleSave} isSaving={saving}>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Level No</label>
+          <p className="block text-sm font-medium text-gray-700 mb-1">Level No</p>
           <div className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 select-none">
             {levelNo}
           </div>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Level Name <span className="text-red-500">*</span></label>
-          <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Director"
+          <label htmlFor="level-name" className="block text-sm font-medium text-gray-700 mb-1">Level Name <span className="text-red-500">*</span></label>
+          <input id="level-name" name="name" type="text" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Director"
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
       </Modal>

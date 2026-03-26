@@ -108,8 +108,8 @@ export default function LeadsPage() {
           showLeadStatus
           topSlot={
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Lead Type <span className="text-red-500">*</span></label>
-              <select value={bp.form.type} onChange={bp.F('type')}
+              <label htmlFor="lead-type" className="block text-sm font-medium text-gray-700 mb-1">Lead Type <span className="text-red-500">*</span></label>
+              <select id="lead-type" name="type" value={bp.form.type} onChange={bp.F('type')}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
                 <option value="">Select type…</option>
                 {leadTypes.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}

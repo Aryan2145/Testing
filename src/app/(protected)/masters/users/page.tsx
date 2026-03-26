@@ -324,23 +324,23 @@ export default function UsersPage() {
         )}
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name <span className="text-red-500">*</span></label>
-            <input type="text" value={form.name} onChange={e => setF('name')(e.target.value)} placeholder="Full name" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <label htmlFor="user-name" className="block text-sm font-medium text-gray-700 mb-1">Full Name <span className="text-red-500">*</span></label>
+            <input id="user-name" name="name" type="text" value={form.name} onChange={e => setF('name')(e.target.value)} placeholder="Full name" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email <span className="text-red-500">*</span></label>
-            <input type="email" value={form.email} onChange={e => setF('email')(e.target.value)} placeholder="email@example.com" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <label htmlFor="user-email" className="block text-sm font-medium text-gray-700 mb-1">Email <span className="text-red-500">*</span></label>
+            <input id="user-email" name="email" type="email" value={form.email} onChange={e => setF('email')(e.target.value)} placeholder="email@example.com" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Contact <span className="text-red-500">*</span></label>
-            <input type="tel" value={form.contact} onChange={e => setF('contact')(e.target.value)} placeholder="10-digit mobile" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <label htmlFor="user-contact" className="block text-sm font-medium text-gray-700 mb-1">Contact <span className="text-red-500">*</span></label>
+            <input id="user-contact" name="contact" type="tel" value={form.contact} onChange={e => setF('contact')(e.target.value)} placeholder="10-digit mobile" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="user-password" className="block text-sm font-medium text-gray-700 mb-1">
               Password {editing ? <span className="text-gray-400 font-normal">(leave blank to keep current)</span> : <span className="text-red-500">*</span>}
             </label>
             <div className="relative">
-              <input type={showPassword ? 'text' : 'password'} value={form.password} onChange={e => setF('password')(e.target.value)} placeholder={editing ? 'Enter new password to change' : 'Set login password'} className="w-full border border-gray-300 rounded-lg px-3 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input id="user-password" name="password" type={showPassword ? 'text' : 'password'} value={form.password} onChange={e => setF('password')(e.target.value)} placeholder={editing ? 'Enter new password to change' : 'Set login password'} className="w-full border border-gray-300 rounded-lg px-3 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition" tabIndex={-1}>
                 {showPassword ? (
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" /></svg>
@@ -351,28 +351,28 @@ export default function UsersPage() {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+            <p className="block text-sm font-medium text-gray-700 mb-1">Department</p>
             <SearchableSelect value={form.department_id} onChange={v => setForm(f => ({ ...f, department_id: v, designation_id: '' }))} options={depts.map(d => ({ value: d.id, label: d.name }))} placeholder="Select dept…" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Designation</label>
+            <p className="block text-sm font-medium text-gray-700 mb-1">Designation</p>
             <SearchableSelect value={form.designation_id} onChange={setF('designation_id')} options={allDesigs.map(d => ({ value: d.id, label: d.name }))} placeholder="Select desig…" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Level <span className="text-red-500">*</span></label>
+            <p className="block text-sm font-medium text-gray-700 mb-1">Level <span className="text-red-500">*</span></p>
             <SearchableSelect value={form.level_id} onChange={v => setForm(f => ({ ...f, level_id: v, manager_user_id: '' }))} options={levels.map(l => ({ value: l.id, label: `L${l.level_no} - ${l.name}` }))} placeholder="Select level…" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Profile <span className="text-red-500">*</span></label>
-            <select value={form.profile} onChange={e => setF('profile')(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <label htmlFor="user-profile" className="block text-sm font-medium text-gray-700 mb-1">Profile <span className="text-red-500">*</span></label>
+            <select id="user-profile" name="profile" value={form.profile} onChange={e => setF('profile')(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="Standard">Standard</option>
               <option value="Administrator">Administrator</option>
             </select>
           </div>
           <div className="col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <p className="block text-sm font-medium text-gray-700 mb-1">
               Manager {selectedLevel?.level_no === 2 ? '(must be L1)' : selectedLevel?.level_no === 3 ? '(must be L1 or L2)' : ''}
-            </label>
+            </p>
             <SearchableSelect value={form.manager_user_id} onChange={setF('manager_user_id')} options={managerCandidates.map(u => ({ value: u.id, label: `${u.name} (${levels.find(l => l.id === u.level_id)?.name ?? ''})` }))} placeholder="Select manager…" />
           </div>
         </div>
@@ -457,8 +457,10 @@ export default function UsersPage() {
 
             <div className="space-y-3 mb-5">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Profile / Role</label>
+                <label htmlFor="reactivate-profile" className="block text-sm font-medium text-gray-700 mb-1">Profile / Role</label>
                 <select
+                  id="reactivate-profile"
+                  name="profile"
                   value={reactivateForm.profile}
                   onChange={e => setReactivateForm(f => ({ ...f, profile: e.target.value }))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -468,7 +470,7 @@ export default function UsersPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Reporting Manager</label>
+                <p className="block text-sm font-medium text-gray-700 mb-1">Reporting Manager</p>
                 <SearchableSelect
                   value={reactivateForm.manager_user_id}
                   onChange={v => setReactivateForm(f => ({ ...f, manager_user_id: v }))}
