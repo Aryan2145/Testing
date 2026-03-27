@@ -29,7 +29,7 @@ export default function LevelsPage() {
       : 1
     setEditing(null)
     setLevelNo(String(nextNo))
-    setName(`L${nextNo}`)
+    setName(`Level ${nextNo}`)
     setOpen(true)
   }
 

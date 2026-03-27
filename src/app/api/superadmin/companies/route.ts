@@ -85,9 +85,9 @@ export async function POST(req: NextRequest) {
   const { data: levels, error: levelsError } = await supabase
     .from('levels')
     .insert([
-      { tenant_id: tid, level_no: 1, name: 'L1 - Admin' },
-      { tenant_id: tid, level_no: 2, name: 'L2 - Manager' },
-      { tenant_id: tid, level_no: 3, name: 'L3 - Executive' },
+      { tenant_id: tid, level_no: 1, name: 'Level 1' },
+      { tenant_id: tid, level_no: 2, name: 'Level 2' },
+      { tenant_id: tid, level_no: 3, name: 'Level 3' },
     ])
     .select()
   if (levelsError) {
