@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   // Query user by contact globally (multi-tenant: no tenant filter)
   const { data: user, error: dbError } = await supabase
     .from('users')
-    .select('id, name, profile, contact, password, status, tenant_id')
+    .select('id, name, profile, contact, password, status, tenant_id, is_superadmin')
     .eq('contact', phone.trim())
     .order('created_at', { ascending: true })
     .limit(1)
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
       phone: user.contact,
       userId: user.id,
       name: user.name,
-      role: user.profile,
+      role: user.is_superadmin ? 'Superadmin' : user.profile,
       tenantId: user.tenant_id ?? process.env.DEFAULT_TENANT_ID ?? '',
     })
     // Record login event (fire-and-forget, never block login)
@@ -75,14 +75,14 @@ export async function POST(req: NextRequest) {
   if (phone.trim() === '9999999999' && password === 'Admin@123') {
     const { data: basicUser } = await supabase
       .from('users')
-      .select('id, name, profile, tenant_id')
+      .select('id, name, profile, tenant_id, is_superadmin')
       .eq('contact', phone.trim())
       .maybeSingle()
     const token = await signSession({
       phone: phone.trim(),
       userId: basicUser?.id ?? null,
       name: basicUser?.name ?? 'Admin User',
-      role: basicUser?.profile ?? 'Administrator',
+      role: basicUser?.is_superadmin ? 'Superadmin' : (basicUser?.profile ?? 'Administrator'),
       tenantId: basicUser?.tenant_id ?? process.env.DEFAULT_TENANT_ID ?? '',
     })
     const res = NextResponse.json({ ok: true })

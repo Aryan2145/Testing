@@ -46,25 +46,15 @@ export async function POST(req: NextRequest) {
   if (!password?.trim()) return NextResponse.json({ error: 'Password is required' }, { status: 400 })
   if (!level_id) return NextResponse.json({ error: 'Level is required' }, { status: 400 })
   if (!profile) return NextResponse.json({ error: 'Profile is required' }, { status: 400 })
-  if (user.role !== 'Administrator')
+  if (user.role !== 'Administrator' && user.role !== 'Superadmin')
     return NextResponse.json({ error: 'Only Administrators can create users' }, { status: 403 })
+
+  // Only Superadmin can create users with Administrator role
+  if (profile === 'Administrator' && user.role !== 'Superadmin')
+    return NextResponse.json({ error: 'Only the Superadmin can assign the Administrator role' }, { status: 403 })
 
   const supabase = createServerSupabase()
   const tid = getTenantId()
-
-  // Acting user must have higher authority (lower level_no) than the user being created
-  if (user.userId) {
-    const [{ data: actingUser }, { data: targetLevel }] = await Promise.all([
-      supabase.from('users').select('levels(level_no)').eq('id', user.userId).single(),
-      supabase.from('levels').select('level_no').eq('id', level_id).single(),
-    ])
-    const actingLevelNo = (actingUser?.levels as unknown as { level_no: number } | null)?.level_no ?? null
-    if (actingLevelNo !== null && targetLevel && targetLevel.level_no <= actingLevelNo)
-      return NextResponse.json(
-        { error: 'You can only create users at lower authority levels than yourself' },
-        { status: 403 }
-      )
-  }
 
   // License cap enforcement
   const [{ count: userCount }, { data: tenant }] = await Promise.all([

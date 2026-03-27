@@ -12,7 +12,7 @@ import { useToast } from '@/contexts/ToastContext'
 type Level = { id: string; name: string; level_no: number }
 type Dept = { id: string; name: string }
 type Desig = { id: string; name: string; department_id: string }
-type UserRow = { id: string; name: string; level_id: string; levels?: Level }
+type UserRow = { id: string; name: string; level_id: string; levels?: Level; is_superadmin?: boolean }
 type DeactivateSummary = { direct_reports: number; active_meetings: number; pending_plans: number; open_orders: number }
 type AuditEntry = { id: string; target_user_name: string; action: string; performed_by_name: string; metadata: Record<string, unknown>; created_at: string }
 
@@ -36,7 +36,10 @@ const COLS: Column[] = [
   { key: 'contact', label: 'Contact' },
   { key: 'email', label: 'Email' },
   { key: 'level', label: 'Level', render: r => (r.levels as Level | null)?.name ?? '' },
-  { key: 'profile', label: 'Profile' },
+  { key: 'profile', label: 'Profile', render: r => r.is_superadmin
+    ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">★ Superadmin</span>
+    : String(r.profile ?? '')
+  },
   { key: 'manager', label: 'Manager', render: r => (r.manager as { name: string } | null)?.name ?? '—' },
   { key: 'status', label: 'Status', render: r => <StatusBadge status={String(r.status)} /> },
 ]
@@ -111,6 +114,10 @@ export default function UsersPage() {
     setEditing(null); setForm(INIT); setFormError(''); setEmailError(''); setShowPassword(false); setOpen(true)
   }
   function openEdit(row: Record<string, unknown>) {
+    if (row.is_superadmin && me?.role !== 'Superadmin') {
+      toast('The Superadmin account can only be edited by the Superadmin themselves', 'error')
+      return
+    }
     setEditing(row)
     setFormError('')
     setEmailError('')
@@ -236,6 +243,7 @@ export default function UsersPage() {
   // Row actions: Deactivate for Active users, Reactivate for Inactive users
   function renderRowActions(row: Record<string, unknown>): ReactNode {
     if (!canDelete) return null
+    if (row.is_superadmin && me?.role !== 'Superadmin') return null
     if (row.status === 'Active') {
       return (
         <button
@@ -369,17 +377,26 @@ export default function UsersPage() {
           </div>
           <div>
             <label htmlFor="user-profile" className="block text-sm font-medium text-gray-700 mb-1">Profile <span className="text-red-500">*</span></label>
-            <select id="user-profile" name="profile" value={form.profile} onChange={e => setF('profile')(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <select id="user-profile" name="profile" value={form.profile} onChange={e => setF('profile')(e.target.value)}
+              disabled={me?.role !== 'Superadmin'}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed">
               <option value="Standard">Standard</option>
-              <option value="Administrator">Administrator</option>
+              {(me?.role === 'Superadmin' || form.profile === 'Administrator') && <option value="Administrator">Administrator</option>}
             </select>
+            {me?.role !== 'Superadmin' && <p className="text-xs text-gray-400 mt-1">Role can only be changed by the Superadmin</p>}
           </div>
-          <div className="col-span-2">
-            <p className="block text-sm font-medium text-gray-700 mb-1">
-              Manager {selectedLevel?.level_no === 2 ? '(must be L1)' : selectedLevel?.level_no === 3 ? '(must be L1 or L2)' : ''}
-            </p>
-            <SearchableSelect value={form.manager_user_id} onChange={setF('manager_user_id')} options={managerCandidates.map(u => ({ value: u.id, label: `${u.name} (${levels.find(l => l.id === u.level_id)?.name ?? ''})` }))} placeholder="Select manager…" />
-          </div>
+          {selectedLevel?.level_no === 1 ? (
+            <div className="col-span-2">
+              <p className="text-xs text-gray-400 italic">Top of org chart — no manager required for L1 users</p>
+            </div>
+          ) : (
+            <div className="col-span-2">
+              <p className="block text-sm font-medium text-gray-700 mb-1">
+                Manager {selectedLevel?.level_no === 2 ? '(must be L1)' : selectedLevel?.level_no === 3 ? '(must be L1 or L2)' : ''}
+              </p>
+              <SearchableSelect value={form.manager_user_id} onChange={setF('manager_user_id')} options={managerCandidates.map(u => ({ value: u.id, label: `${u.name} (${levels.find(l => l.id === u.level_id)?.name ?? ''})` }))} placeholder="Select manager…" />
+            </div>
+          )}
         </div>
       </Modal>
 

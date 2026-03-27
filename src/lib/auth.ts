@@ -30,10 +30,11 @@ export async function requireUser(): Promise<SessionUser> {
       const supabase = createServerSupabase()
       const { data } = await supabase
         .from('users')
-        .select('profile, status')
+        .select('profile, status, is_superadmin')
         .eq('id', user.userId)
         .single()
       if (data?.profile) user.role = data.profile
+      if (data?.is_superadmin && data?.status !== 'Inactive') user.role = 'Superadmin'
       // Mark deactivated users — checkPermission will deny all actions
       // and return proper JSON 403 responses (vs throwing which causes HTML 500)
       if (data?.status === 'Inactive') user.role = 'Deactivated'

@@ -12,6 +12,7 @@ export async function checkPermission(
   section: PermSection,
   action: PermAction
 ): Promise<boolean> {
+  if (user.role === 'Superadmin') return true
   if (user.role === 'Administrator') return true
   if (user.role === 'Deactivated') return false
   const supabase = createServerSupabase()
@@ -39,7 +40,7 @@ export async function getDataScope(
   user: SessionUser,
   section: PermSection
 ): Promise<DataScope> {
-  if (user.role === 'Administrator') return 'all'
+  if (user.role === 'Superadmin' || user.role === 'Administrator') return 'all'
   const supabase = createServerSupabase()
   const tid = getTenantId()
   const { data } = await supabase
