@@ -129,17 +129,22 @@ export default function UsersPage() {
     setSaving(true)
     const body: Record<string, unknown> = { name: form.name.trim(), email: form.email.trim(), contact: form.contact.trim(), department_id: form.department_id || null, designation_id: form.designation_id || null, level_id: form.level_id, profile: form.profile, manager_user_id: form.manager_user_id || null }
     if (!editing || form.password.trim()) body.password = form.password.trim()
-    const res = await fetch(editing ? `/api/masters/users/${editing.id as string}` : '/api/masters/users', {
-      method: editing ? 'PUT' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    const data = await res.json()
-    setSaving(false)
-    if (!res.ok) { setFormError(data.error ?? 'Save failed. Please try again.'); return }
-    setOpen(false)
-    crud.refetch()
-    refreshLists()
+    try {
+      const res = await fetch(editing ? `/api/masters/users/${editing.id as string}` : '/api/masters/users', {
+        method: editing ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      setSaving(false)
+      if (!res.ok) { setFormError(data.error ?? 'Save failed. Please try again.'); return }
+      setOpen(false)
+      crud.refetch()
+      refreshLists()
+    } catch {
+      setSaving(false)
+      setFormError('Something went wrong. Please try again.')
+    }
   }
 
   // Deactivation
@@ -147,9 +152,13 @@ export default function UsersPage() {
     setDeactivateTarget(row)
     setDeactivateSummary(null)
     setDeactivateLoading(true)
-    const res = await fetch(`/api/masters/users/${row.id as string}/deactivation-summary`)
-    const data = await res.json()
-    setDeactivateSummary(data)
+    try {
+      const res = await fetch(`/api/masters/users/${row.id as string}/deactivation-summary`)
+      if (res.ok) setDeactivateSummary(await res.json())
+      else toast('Failed to load deactivation summary', 'error')
+    } catch {
+      toast('Failed to load deactivation summary', 'error')
+    }
     setDeactivateLoading(false)
   }
 
@@ -162,7 +171,10 @@ export default function UsersPage() {
       body: JSON.stringify({ action: 'deactivate' }),
     })
     setDeactivateSaving(false)
-    if (!res.ok) { const d = await res.json(); toast(d.error ?? 'Deactivation failed', 'error') }
+    if (!res.ok) {
+      try { const d = await res.json(); toast(d.error ?? 'Deactivation failed', 'error') }
+      catch { toast('Deactivation failed', 'error') }
+    }
     setDeactivateTarget(null)
     setDeactivateSummary(null)
     crud.refetch()
@@ -183,26 +195,35 @@ export default function UsersPage() {
     if (!reactivateTarget) return
     setReactivateError('')
     setReactivateSaving(true)
-    const res = await fetch(`/api/masters/users/${reactivateTarget.id as string}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'reactivate', ...reactivateForm }),
-    })
-    const data = await res.json()
-    setReactivateSaving(false)
-    if (!res.ok) { setReactivateError(data.error ?? 'Reactivation failed'); return }
-    setReactivateTarget(null)
-    crud.refetch()
-    refreshLists()
+    try {
+      const res = await fetch(`/api/masters/users/${reactivateTarget.id as string}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reactivate', ...reactivateForm }),
+      })
+      const data = await res.json()
+      setReactivateSaving(false)
+      if (!res.ok) { setReactivateError(data.error ?? 'Reactivation failed'); return }
+      setReactivateTarget(null)
+      crud.refetch()
+      refreshLists()
+    } catch {
+      setReactivateSaving(false)
+      setReactivateError('Something went wrong. Please try again.')
+    }
   }
 
   // Audit log
   async function openAuditLog() {
     setShowAudit(true)
     setAuditLoading(true)
-    const res = await fetch('/api/masters/users/audit-log')
-    const data = await res.json()
-    setAuditLogs(Array.isArray(data) ? data : [])
+    try {
+      const res = await fetch('/api/masters/users/audit-log')
+      if (res.ok) { const d = await res.json(); setAuditLogs(Array.isArray(d) ? d : []) }
+      else toast('Failed to load audit log', 'error')
+    } catch {
+      toast('Failed to load audit log', 'error')
+    }
     setAuditLoading(false)
   }
 

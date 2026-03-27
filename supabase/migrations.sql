@@ -364,7 +364,7 @@ CREATE TABLE IF NOT EXISTS expenses (
   tenant_id    UUID NOT NULL,
   user_id      UUID NOT NULL REFERENCES users(id),
   expense_date DATE NOT NULL,
-  category     TEXT NOT NULL CHECK (category IN ('Travel','Food','Accommodation','Phone','Stationary','Miscellaneous')),
+  category     TEXT NOT NULL,
   amount       NUMERIC(12,2) NOT NULL CHECK (amount > 0),
   notes        TEXT,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),

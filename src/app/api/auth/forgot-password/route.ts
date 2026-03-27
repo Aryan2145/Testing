@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
 
   const { data: user } = await supabase
     .from('users')
-    .select('id, name, email, contact, password')
+    .select('id, name, email, contact')
     .eq('contact', phone.trim())
     .eq('tenant_id', tid)
     .maybeSingle()
@@ -45,15 +45,11 @@ export async function POST(req: NextRequest) {
       <p style="color:#475569;margin:0 0 20px">Hi <strong>${user.name}</strong>, we received a request to reset your password.</p>
 
       <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;margin-bottom:20px">
-        <p style="font-size:13px;font-weight:600;color:#64748b;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.05em">Your Current Login Details</p>
+        <p style="font-size:13px;font-weight:600;color:#64748b;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.05em">Your Login Details</p>
         <table style="border-collapse:collapse;width:100%">
           <tr>
             <td style="padding:8px 12px;background:#fff;border:1px solid #e2e8f0;font-weight:600;color:#374151;font-size:14px;width:40%">Phone (Username)</td>
             <td style="padding:8px 12px;border:1px solid #e2e8f0;color:#1e293b;font-size:14px">${user.contact}</td>
-          </tr>
-          <tr>
-            <td style="padding:8px 12px;background:#fff;border:1px solid #e2e8f0;font-weight:600;color:#374151;font-size:14px">Current Password</td>
-            <td style="padding:8px 12px;border:1px solid #e2e8f0;color:#1e293b;font-size:14px;font-family:monospace">${user.password ?? '—'}</td>
           </tr>
         </table>
       </div>
@@ -74,11 +70,10 @@ export async function POST(req: NextRequest) {
   // If SMTP is not configured, log to console (dev mode) and still succeed
   if (!process.env.SMTP_HOST || !process.env.SMTP_USER) {
     console.log('\n========== PASSWORD RESET (no SMTP configured) ==========')
-    console.log(`To:       ${user.email}`)
-    console.log(`Name:     ${user.name}`)
-    console.log(`Phone:    ${user.contact}`)
-    console.log(`Password: ${user.password ?? '—'}`)
-    console.log(`Link:     ${resetLink}`)
+    console.log(`To:    ${user.email}`)
+    console.log(`Name:  ${user.name}`)
+    console.log(`Phone: ${user.contact}`)
+    console.log(`Link:  ${resetLink}`)
     console.log('==========================================================\n')
     return NextResponse.json({ ok: true })
   }

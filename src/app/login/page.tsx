@@ -48,13 +48,13 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="login-phone" className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-            <input id="login-phone" name="phone" type="tel" autoComplete="username" value={phone} onChange={e => setPhone(e.target.value)} placeholder="9999999999" required
+            <input id="login-phone" name="phone" type="tel" autoComplete="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="9999999999" required
               className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
             <label htmlFor="login-password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
             <div className="relative">
-              <input id="login-password" name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required
+              <input id="login-password" name="password" type={showPassword ? 'text' : 'password'} autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required
                 className="w-full border border-gray-300 rounded-lg px-3 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               <button type="button" onClick={() => setShowPassword(v => !v)} tabIndex={-1}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition">

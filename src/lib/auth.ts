@@ -34,9 +34,10 @@ export async function requireUser(): Promise<SessionUser> {
         .eq('id', user.userId)
         .single()
       if (data?.profile) user.role = data.profile
-      if (data?.status === 'Inactive') throw new Error('Account deactivated')
-    } catch (e) {
-      if ((e as Error).message === 'Account deactivated') throw e
+      // Mark deactivated users — checkPermission will deny all actions
+      // and return proper JSON 403 responses (vs throwing which causes HTML 500)
+      if (data?.status === 'Inactive') user.role = 'Deactivated'
+    } catch {
       // If DB lookup fails (e.g. during migrations), fall back to session role
     }
   }

@@ -13,6 +13,7 @@ export async function checkPermission(
   action: PermAction
 ): Promise<boolean> {
   if (user.role === 'Administrator') return true
+  if (user.role === 'Deactivated') return false
   const supabase = createServerSupabase()
   const tid = getTenantId()
   const { data } = await supabase
