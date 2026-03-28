@@ -108,7 +108,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
     invalidateMeCache()
   }, [pathname])
 
-  const isAdmin = me?.role === 'Administrator'
+  const isAdmin = me?.role === 'Administrator' || me?.role === 'Superadmin'
   const perms = me?.permissions
 
   const showMasters = isAdmin || Object.values(perms ?? {}).some(p => p.view)

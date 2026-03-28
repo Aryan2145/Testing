@@ -156,7 +156,7 @@ const SECTIONS = [
 
 export default function MastersPage() {
   const me = useMe()
-  const isAdmin = me?.role === 'Administrator'
+  const isAdmin = me?.role === 'Administrator' || me?.role === 'Superadmin'
 
   const visibleSections = SECTIONS.filter(s =>
     isAdmin || (me?.permissions?.[s.key]?.view ?? false)

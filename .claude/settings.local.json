@@ -28,7 +28,9 @@
       "Bash(npm view:*)",
       "Bash(npm uninstall:*)",
       "Bash(npm audit:*)",
-      "Bash(\"C:/Users/Aryan/documents/RGB_Software/testing/public/site.webmanifest\")"
+      "Bash(\"C:/Users/Aryan/documents/RGB_Software/testing/public/site.webmanifest\")",
+      "Bash(cd:*)",
+      "Bash(grep -r \"const isAdmin = me?\\\\.role === ''''Administrator'''' || me?\\\\.role === ''''Superadmin''''\" . --include=\"*.tsx\")"
     ]
   },
   "enableAllProjectMcpServers": true,

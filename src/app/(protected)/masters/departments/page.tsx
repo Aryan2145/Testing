@@ -11,7 +11,7 @@ const COLS: Column[] = [{ key: 'name', label: 'Name' }]
 export default function DepartmentsPage() {
   const crud = useCrud('/api/masters/departments')
   const me = useMe()
-  const isAdmin = me?.role === 'Administrator'
+  const isAdmin = me?.role === 'Administrator' || me?.role === 'Superadmin'
   const canEdit = isAdmin || (me?.permissions?.organization?.edit ?? false)
   const canDelete = isAdmin || (me?.permissions?.organization?.delete ?? false)
   const [open, setOpen] = useState(false)

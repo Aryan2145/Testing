@@ -23,7 +23,7 @@ export default function ProductsPage() {
   const crud = useCrud('/api/masters/products')
   const me = useMe()
   const { toast } = useToast()
-  const isAdmin = me?.role === 'Administrator'
+  const isAdmin = me?.role === 'Administrator' || me?.role === 'Superadmin'
   const canEdit = isAdmin || (me?.permissions?.products?.edit ?? false)
   const canDelete = isAdmin || (me?.permissions?.products?.delete ?? false)
   const [open, setOpen] = useState(false)

@@ -13,7 +13,7 @@ const COLS: Column[] = [
 export default function ExpenseCategoriesPage() {
   const crud = useCrud('/api/masters/expense-categories')
   const me = useMe()
-  const isAdmin = me?.role === 'Administrator'
+  const isAdmin = me?.role === 'Administrator' || me?.role === 'Superadmin'
 
   const [open, setOpen]       = useState(false)
   const [editing, setEditing] = useState<Record<string, unknown> | null>(null)

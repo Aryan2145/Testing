@@ -32,11 +32,7 @@ export async function GET() {
     .single()
   const tenantName: string = tenant?.name ?? ''
 
-  if (user.role === 'SuperAdmin') {
-    return NextResponse.json({ ...user, tenantName, hasSubordinates: false, permissions: allFalse })
-  }
-
-  if (user.role === 'Administrator') {
+  if (user.role === 'Superadmin' || user.role === 'Administrator') {
     if (!user.userId) return NextResponse.json({ ...user, tenantName, hasSubordinates: false, permissions: allTrue })
     const { count } = await supabase
       .from('user_visibility')

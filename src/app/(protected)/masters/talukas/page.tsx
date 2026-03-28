@@ -17,7 +17,7 @@ export default function TalukasPage() {
   const crud = useCrud('/api/masters/talukas')
   const me = useMe()
   const { toast } = useToast()
-  const isAdmin = me?.role === 'Administrator'
+  const isAdmin = me?.role === 'Administrator' || me?.role === 'Superadmin'
   const canEdit = isAdmin || (me?.permissions?.locations?.edit ?? false)
   const canDelete = isAdmin || (me?.permissions?.locations?.delete ?? false)
   const [open, setOpen] = useState(false)

@@ -50,7 +50,7 @@ export default function UsersPage() {
   const crud = useCrud('/api/masters/users', { scope: 'manage' })
   const me = useMe()
   const { toast } = useToast()
-  const isAdmin = me?.role === 'Administrator'
+  const isAdmin = me?.role === 'Administrator' || me?.role === 'Superadmin'
   const canEdit = isAdmin || (me?.permissions?.users?.edit ?? false)
   const canDelete = isAdmin || (me?.permissions?.users?.delete ?? false)
 

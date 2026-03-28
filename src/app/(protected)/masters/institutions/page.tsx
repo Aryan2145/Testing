@@ -31,7 +31,7 @@ const COLS: Column[] = [
 export default function InstitutionsPage() {
   const crud = useCrud('/api/masters/institutions')
   const me = useMe()
-  const isAdmin  = me?.role === 'Administrator'
+  const isAdmin = me?.role === 'Administrator' || me?.role === 'Superadmin'
   const canEdit  = isAdmin || (me?.permissions?.business?.edit   ?? false)
   const canDelete = isAdmin || (me?.permissions?.business?.delete ?? false)
 

@@ -59,7 +59,7 @@ export default function LeadsPage() {
   const crud = useCrud('/api/leads')
   const me = useMe()
   const { toast } = useToast()
-  const isAdmin  = me?.role === 'Administrator'
+  const isAdmin = me?.role === 'Administrator' || me?.role === 'Superadmin'
   const canEdit  = isAdmin || (me?.permissions?.business?.edit   ?? false)
   const canDelete = isAdmin || (me?.permissions?.business?.delete ?? false)
 
