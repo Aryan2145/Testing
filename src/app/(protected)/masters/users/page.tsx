@@ -476,7 +476,7 @@ export default function UsersPage() {
                 <SearchableSelect
                   value={reactivateForm.manager_user_id}
                   onChange={v => setReactivateForm(f => ({ ...f, manager_user_id: v }))}
-                  options={activeUsers.filter(u => u.id !== reactivateTarget.id).map(u => ({ value: u.id, label: `${u.name} (${levels.find(l => l.id === u.level_id)?.name ?? ''})` }))}
+                  options={activeUsers.filter(u => u.id !== reactivateTarget.id).map(u => ({ value: u.id, label: u.name }))}
                   placeholder="Select manager…"
                 />
               </div>
