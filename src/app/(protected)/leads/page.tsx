@@ -53,6 +53,10 @@ const COLS: Column[] = [
     if (!d) return <span className="text-gray-400">—</span>
     return <span className="text-sm">{new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
   }},
+  { key: 'created_by', label: 'Created By', render: r => {
+    const u = r.created_by as { name: string } | null
+    return u ? <span className="text-sm">{u.name}</span> : <span className="text-gray-400">—</span>
+  }},
 ]
 
 export default function LeadsPage() {

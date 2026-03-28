@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
 
   let query = supabase
     .from('business_partners')
-    .select('*, districts(name), talukas(name), villages(name)')
+    .select('*, districts(name), talukas(name), villages(name), created_by:created_by_user_id(id, name)')
     .eq('tenant_id', tid)
     .order('name')
   if (q) query = query.ilike('name', `%${q}%`)
@@ -66,6 +66,7 @@ export async function POST(req: NextRequest) {
       longitude: longitude != null ? Number(longitude) : null,
       temperature: temperature || null,
       next_follow_up_date: next_follow_up_date || null,
+      created_by_user_id: user.userId || null,
     })
     .select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
