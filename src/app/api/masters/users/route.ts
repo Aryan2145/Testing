@@ -19,8 +19,8 @@ export async function GET(req: NextRequest) {
   if (q) query = query.or(`name.ilike.%${q}%,email.ilike.%${q}%,contact.ilike.%${q}%`)
 
   // scope=manage: non-admins see only users in their user_visibility chain
-  // Administrators always see all users regardless of scope
-  if (scope === 'manage' && user.userId && user.role !== 'Administrator') {
+  // Administrators and Superadmin always see all users regardless of scope
+  if (scope === 'manage' && user.userId && user.role !== 'Administrator' && user.role !== 'Superadmin') {
     const { data: visibleRows } = await supabase
       .from('user_visibility')
       .select('target_user_id')
