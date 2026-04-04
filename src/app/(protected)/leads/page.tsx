@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import CrudPage, { Column } from '@/components/ui/CrudPage'
 import Modal from '@/components/ui/Modal'
 import { useCrud } from '@/hooks/useCrud'
@@ -55,6 +55,184 @@ const COLS: Column[] = [
   }},
 ]
 
+// ── CSV helpers ───────────────────────────────────────────────────────────────
+const CSV_HEADERS = ['Name*', 'Type*', 'Contact Person', 'Mobile 1', 'Mobile 2', 'Email', 'Address', 'State', 'District', 'Taluka', 'Temperature (Cold/Warm/Hot)', 'Next Follow-up Date (YYYY-MM-DD)', 'Description']
+const CSV_KEYS    = ['name',  'type',  'contact_person_name', 'mobile_1', 'mobile_2', 'email', 'address', 'state', 'district', 'taluka', 'temperature', 'next_follow_up_date', 'description']
+
+function downloadTemplate() {
+  const sampleRow = ['ABC Solar', 'Residential', 'Ravi Kumar', '9876543210', '', 'ravi@example.com', '123 Main St', 'Maharashtra', 'Pune', 'Haveli', 'Warm', '2026-05-01', 'Interested in 3kW system']
+  const csv = [CSV_HEADERS.join(','), sampleRow.join(',')].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url; a.download = 'leads_template.csv'; a.click()
+  URL.revokeObjectURL(url)
+}
+
+function parseCSV(text: string): Record<string, string>[] {
+  const lines = text.trim().split(/\r?\n/)
+  if (lines.length < 2) return []
+  // skip header row
+  return lines.slice(1).map(line => {
+    const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''))
+    const obj: Record<string, string> = {}
+    CSV_KEYS.forEach((k, i) => { obj[k] = cols[i] ?? '' })
+    return obj
+  }).filter(r => r.name || r.type)
+}
+
+// ── Bulk Upload Modal ─────────────────────────────────────────────────────────
+function BulkUploadModal({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: () => void }) {
+  const { toast } = useToast()
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [rows, setRows]       = useState<Record<string, string>[]>([])
+  const [fileName, setFileName] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [result, setResult] = useState<{ inserted: number; errors: { row: number; message: string }[] } | null>(null)
+
+  function reset() { setRows([]); setFileName(''); setResult(null); if (fileRef.current) fileRef.current.value = '' }
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setFileName(file.name)
+    setResult(null)
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const text = ev.target?.result as string
+      const parsed = parseCSV(text)
+      if (parsed.length === 0) { toast('No data rows found in CSV', 'error'); return }
+      setRows(parsed)
+    }
+    reader.readAsText(file)
+  }
+
+  async function handleImport() {
+    if (rows.length === 0) return
+    setImporting(true)
+    try {
+      const res = await fetch('/api/leads/bulk-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leads: rows }),
+      })
+      const data = await res.json()
+      setResult(data)
+      if (data.inserted > 0) {
+        toast(`${data.inserted} lead${data.inserted > 1 ? 's' : ''} imported successfully`, 'success')
+        onDone()
+      }
+    } catch {
+      toast('Import failed', 'error')
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h3 className="text-base font-semibold text-gray-800">Bulk Upload Leads</h3>
+          <button onClick={() => { reset(); onClose() }} className="text-gray-400 hover:text-gray-600">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          {/* Step 1 */}
+          <div>
+            <p className="text-sm font-medium text-gray-700 mb-2">Step 1 — Download the template</p>
+            <button onClick={downloadTemplate}
+              className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 rounded-lg px-4 py-2 transition">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+              Download CSV Template
+            </button>
+            <p className="text-xs text-gray-400 mt-1">Fill in the template. Columns marked * are required.</p>
+          </div>
+
+          {/* Step 2 */}
+          <div>
+            <p className="text-sm font-medium text-gray-700 mb-2">Step 2 — Upload filled CSV</p>
+            <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition">
+              <svg className="w-6 h-6 text-gray-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
+              <span className="text-sm text-gray-500">{fileName ? fileName : 'Click to select CSV file'}</span>
+              <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFile} />
+            </label>
+          </div>
+
+          {/* Preview */}
+          {rows.length > 0 && !result && (
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-2">Preview — {rows.length} row{rows.length > 1 ? 's' : ''} detected</p>
+              <div className="overflow-x-auto rounded-lg border border-gray-200 max-h-48">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 sticky top-0">
+                    <tr>{['Name', 'Type', 'Mobile 1', 'State', 'District', 'Temperature'].map(h => (
+                      <th key={h} className="text-left px-3 py-2 font-medium text-gray-600 whitespace-nowrap">{h}</th>
+                    ))}</tr>
+                  </thead>
+                  <tbody>
+                    {rows.slice(0, 50).map((r, i) => (
+                      <tr key={i} className="border-t border-gray-50">
+                        <td className="px-3 py-2 text-gray-700">{r.name || <span className="text-red-400">—</span>}</td>
+                        <td className="px-3 py-2 text-gray-700">{r.type || <span className="text-red-400">—</span>}</td>
+                        <td className="px-3 py-2 text-gray-700">{r.mobile_1 || '—'}</td>
+                        <td className="px-3 py-2 text-gray-700">{r.state || '—'}</td>
+                        <td className="px-3 py-2 text-gray-700">{r.district || '—'}</td>
+                        <td className="px-3 py-2 text-gray-700">{r.temperature || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {rows.length > 50 && <p className="text-xs text-gray-400 mt-1">Showing first 50 of {rows.length} rows.</p>}
+            </div>
+          )}
+
+          {/* Result */}
+          {result && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <svg className="w-5 h-5 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <p className="text-sm text-green-800 font-medium">{result.inserted} lead{result.inserted !== 1 ? 's' : ''} imported successfully</p>
+              </div>
+              {result.errors.length > 0 && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg max-h-40 overflow-y-auto">
+                  <p className="text-sm font-medium text-red-700 mb-2">{result.errors.length} row{result.errors.length !== 1 ? 's' : ''} skipped:</p>
+                  {result.errors.map((e, i) => (
+                    <p key={i} className="text-xs text-red-600">Row {e.row}: {e.message}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+          <button onClick={() => { reset(); onClose() }} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-200 rounded-lg">
+            {result ? 'Close' : 'Cancel'}
+          </button>
+          {!result && (
+            <button
+              onClick={handleImport}
+              disabled={rows.length === 0 || importing}
+              className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition">
+              {importing ? 'Importing…' : `Import ${rows.length > 0 ? rows.length + ' Leads' : ''}`}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 export default function LeadsPage() {
   const crud = useCrud('/api/leads')
   const me = useMe()
@@ -64,9 +242,10 @@ export default function LeadsPage() {
   const canDelete = isAdmin || (me?.permissions?.business?.delete ?? false)
 
   const bp = useBPForm()
-  const [open, setOpen]       = useState(false)
-  const [editing, setEditing] = useState<Record<string, unknown> | null>(null)
-  const [saving, setSaving]   = useState(false)
+  const [open, setOpen]           = useState(false)
+  const [editing, setEditing]     = useState<Record<string, unknown> | null>(null)
+  const [saving, setSaving]       = useState(false)
+  const [bulkOpen, setBulkOpen]   = useState(false)
   const [leadTypes, setLeadTypes] = useState<{ id: string; name: string }[]>([])
 
   useEffect(() => {
@@ -90,10 +269,21 @@ export default function LeadsPage() {
     if (ok !== false && ok !== null) setOpen(false)
   }
 
+  const headerExtra = canEdit ? (
+    <button
+      onClick={() => setBulkOpen(true)}
+      className="flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-gray-800 border border-gray-200 hover:border-gray-300 px-3 py-1.5 rounded-lg transition"
+    >
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+      Bulk Upload
+    </button>
+  ) : undefined
+
   return (
     <>
       <CrudPage
         title="Leads" columns={COLS}
+        headerExtra={headerExtra}
         rows={crud.rows} allRowsCount={crud.allRows.length}
         isLoading={crud.isLoading} search={crud.search} onSearchChange={crud.setSearch}
         page={crud.page} totalPages={crud.totalPages} onPage={crud.setPage}
@@ -120,6 +310,12 @@ export default function LeadsPage() {
           }
         />
       </Modal>
+
+      <BulkUploadModal
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        onDone={() => { crud.refetch() }}
+      />
     </>
   )
 }
