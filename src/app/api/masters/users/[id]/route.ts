@@ -13,15 +13,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   const supabase = createServerSupabase()
   const tid = getTenantId()
 
-  // Fetch existing user + acting user's level in parallel
-  const [existingResult, actingResult] = await Promise.all([
-    supabase.from('users').select('name, profile, manager_user_id, level_id, levels(level_no), is_superadmin').eq('id', params.id).eq('tenant_id', tid).single(),
-    user.userId ? supabase.from('users').select('levels(level_no)').eq('id', user.userId).single() : Promise.resolve({ data: null }),
-  ])
-  const existing = existingResult.data
+  // Fetch existing user to support protections and audit logging
+  const { data: existing } = await supabase
+    .from('users').select('name, profile, manager_user_id, is_superadmin').eq('id', params.id).eq('tenant_id', tid).single()
   const oldManagerId = existing?.manager_user_id ?? null
-  const targetLevelNo = (existing?.levels as unknown as { level_no: number } | null)?.level_no ?? null
-  const actingLevelNo = (actingResult.data?.levels as unknown as { level_no: number } | null)?.level_no ?? null
 
   // Superadmin account protection — only Superadmin can edit the Superadmin
   if ((existing as unknown as Record<string, unknown>)?.is_superadmin && user.role !== 'Superadmin')
@@ -29,11 +24,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
   // Self-edit restrictions
   if (params.id === user.userId) {
-    if (body.level_id && body.level_id !== existing?.level_id)
-      return NextResponse.json(
-        { error: user.role === 'Administrator' ? 'Administrators cannot change their own level' : 'You cannot change your own level' },
-        { status: 400 }
-      )
     if (body.profile && body.profile !== existing?.profile)
       return NextResponse.json(
         { error: user.role === 'Administrator' ? 'Administrators cannot change their own role' : 'You cannot change your own role' },
@@ -43,39 +33,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return NextResponse.json({ error: 'You cannot change your own hierarchy position' }, { status: 400 })
   }
 
-  // Level hierarchy check: non-admins cannot edit users at same or higher authority level
-  if (params.id !== user.userId && user.role !== 'Administrator' && user.role !== 'Superadmin') {
-    if (actingLevelNo === null)
-      return NextResponse.json({ error: 'Your account does not have a level assigned to manage users' }, { status: 403 })
-    if (targetLevelNo === null || targetLevelNo <= actingLevelNo)
-      return NextResponse.json({ error: 'You can only manage users at lower authority levels than yourself' }, { status: 403 })
-  }
-
-  // Level changes require Admin or Superadmin
-  if (user.role !== 'Administrator' && user.role !== 'Superadmin') {
-    if (body.level_id && body.level_id !== existing?.level_id)
-      return NextResponse.json({ error: 'Only Administrators can change a user\'s level' }, { status: 403 })
-  }
   // Profile (role) changes require Superadmin only
   if (body.profile && body.profile !== existing?.profile && user.role !== 'Superadmin')
     return NextResponse.json({ error: 'Only the Superadmin can change a user\'s role' }, { status: 403 })
 
-  // Level-based manager validation: manager must have a strictly lower level_no
-  // Fall back to existing level_id if not being changed in this request
-  const levelIdForValidation = (body.level_id ?? existing?.level_id) as string | undefined
-  if (body.manager_user_id && levelIdForValidation) {
-    const { data: userLevel } = await supabase.from('levels').select('level_no').eq('id', levelIdForValidation).single()
-    const { data: mgr } = await supabase.from('users')
-      .select('level_id, levels(level_no)').eq('id', body.manager_user_id).single()
-    if (userLevel && mgr) {
-      const mgrLevelNo = (mgr.levels as unknown as { level_no: number })?.level_no
-      if (mgrLevelNo >= userLevel.level_no)
-        return NextResponse.json({ error: 'Manager must be at a higher level than the user' }, { status: 400 })
-    }
-  }
-
   // Whitelist allowed fields — prevent arbitrary column injection
-  const ALLOWED_PUT_FIELDS = ['name', 'email', 'contact', 'password', 'department_id', 'designation_id', 'level_id', 'profile', 'manager_user_id']
+  const ALLOWED_PUT_FIELDS = ['name', 'email', 'contact', 'password', 'department_id', 'designation_id', 'profile', 'manager_user_id']
   const safeBody: Record<string, unknown> = {}
   for (const key of ALLOWED_PUT_FIELDS) {
     if (key in body) safeBody[key] = body[key]

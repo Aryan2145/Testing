@@ -24,14 +24,13 @@ export async function GET() {
 
   const { data: users } = await supabase
     .from('users')
-    .select('id, name, manager_user_id, levels(name)')
+    .select('id, name, manager_user_id')
     .in('id', allIds)
 
-  const userMap: Record<string, { name: string; level: string; manager_user_id: string | null }> = {}
+  const userMap: Record<string, { name: string; manager_user_id: string | null }> = {}
   for (const u of users ?? []) {
     userMap[u.id] = {
       name: u.name,
-      level: ((u.levels as unknown) as { name: string } | null)?.name ?? '',
       manager_user_id: u.manager_user_id ?? null,
     }
   }
@@ -39,10 +38,8 @@ export async function GET() {
   const result = rows.map(r => ({
     viewer_user_id: r.viewer_user_id,
     viewer_name: userMap[r.viewer_user_id]?.name ?? '',
-    viewer_level: userMap[r.viewer_user_id]?.level ?? '',
     target_user_id: r.target_user_id,
     target_name: userMap[r.target_user_id]?.name ?? '',
-    target_level: userMap[r.target_user_id]?.level ?? '',
     target_manager_user_id: userMap[r.target_user_id]?.manager_user_id ?? null,
   }))
 

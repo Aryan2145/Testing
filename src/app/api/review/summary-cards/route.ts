@@ -17,7 +17,7 @@ export async function GET() {
 
   const { data: subs } = await supabase
     .from('users')
-    .select('id, name, levels(name)')
+    .select('id, name')
     .in('id', subIds)
     .eq('tenant_id', tenantId)
     .eq('status', 'Active')
@@ -78,7 +78,6 @@ export async function GET() {
   const cards = subs.map(s => ({
     id: s.id,
     name: s.name,
-    level: ((s.levels as unknown) as { name: string } | null)?.name ?? '',
     plan: planMap[s.id] ?? null,
     today_meetings: visitMap[s.id] ?? 0,
     today_expenses: expenseMap[s.id] ?? 0,

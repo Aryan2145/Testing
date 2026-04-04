@@ -27,22 +27,18 @@ export async function GET(req: NextRequest) {
   const targetIds = rows.map(r => r.target_user_id)
   const { data: users } = await supabase
     .from('users')
-    .select('id, name, levels(name)')
+    .select('id, name')
     .in('id', targetIds)
 
-  const userMap: Record<string, { name: string; level: string }> = {}
+  const userMap: Record<string, { name: string }> = {}
   for (const u of users ?? []) {
-    userMap[u.id] = {
-      name: u.name,
-      level: ((u.levels as unknown) as { name: string } | null)?.name ?? '',
-    }
+    userMap[u.id] = { name: u.name }
   }
 
   const result = rows.map(r => ({
     id: r.id,
     target_user_id: r.target_user_id,
     name: userMap[r.target_user_id]?.name ?? '',
-    level: userMap[r.target_user_id]?.level ?? '',
   }))
 
   return NextResponse.json(result)

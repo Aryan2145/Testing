@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback } from 'react'
 
-type Tab = 'locations' | 'products' | 'distributors' | 'dealers'
+type Tab = 'locations' | 'products'
 type RawRow = Record<string, string>
 
 type ImportResult = {
@@ -33,25 +33,11 @@ const TAB_CONFIG: Record<Tab, {
     cols: ['Category', 'Sub-Category', 'Product Name', 'Price', 'SKU'],
     hint: 'Hierarchy: Category → Sub-Category → Product. Leave Product Name empty to create only higher levels. Price and SKU are optional.',
   },
-  distributors: {
-    label: 'Distributors',
-    sheetName: 'Distributors',
-    endpoint: '/api/masters/import/distributors',
-    cols: ['Name', 'Phone', 'Address', 'Description', 'District', 'Taluka', 'Village', 'Latitude', 'Longitude'],
-    hint: 'Name is required. District, Taluka, Village are optional for place assignment. Phone must be 10 digits if provided.',
-  },
-  dealers: {
-    label: 'Dealers',
-    sheetName: 'Dealers',
-    endpoint: '/api/masters/import/dealers',
-    cols: ['Name', 'Phone', 'Address', 'Description', 'District', 'Taluka', 'Village', 'Distributor', 'Latitude', 'Longitude'],
-    hint: 'Name, District and Taluka are required. Distributor column links by name — import Distributors first if linking.',
-  },
 }
 
 const TABS = Object.keys(TAB_CONFIG) as Tab[]
 
-const EMPTY_ROWS: Record<Tab, RawRow[]> = { locations: [], products: [], distributors: [], dealers: [] }
+const EMPTY_ROWS: Record<Tab, RawRow[]> = { locations: [], products: [] }
 
 export default function MastersImportPage() {
   const [tab, setTab] = useState<Tab>('locations')
@@ -235,27 +221,10 @@ export default function MastersImportPage() {
         ))}
       </div>
 
-      {/* Dealer import order notice */}
-      {tab === 'dealers' && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5 flex gap-3 text-sm text-amber-800">
-          <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-          </svg>
-          <span><strong>Import order matters:</strong> If linking dealers to distributors via the Distributor column, import the <strong>Distributors</strong> sheet first so the names can be resolved.</span>
-        </div>
-      )}
-
       {/* Hint */}
-      {tab !== 'dealers' && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-5 text-sm text-blue-800">
-          {cfg.hint}
-        </div>
-      )}
-      {tab === 'dealers' && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-5 text-sm text-blue-800">
-          {cfg.hint}
-        </div>
-      )}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-5 text-sm text-blue-800">
+        {cfg.hint}
+      </div>
 
       {/* Upload zone */}
       {!hasRows && (

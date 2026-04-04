@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
       district_id: new_prospect.district_id || null,
       taluka_id: new_prospect.taluka_id || null,
       village_id: new_prospect.village_id || null,
+      created_by_user_id: user.userId || null,
     }).select().single()
     if (bpErr) return NextResponse.json({ error: bpErr.message }, { status: 500 })
     const { data, error } = await supabase.from('daily_visits').insert({

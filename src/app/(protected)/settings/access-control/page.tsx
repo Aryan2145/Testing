@@ -5,21 +5,18 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { invalidateMeCache } from '@/hooks/useMe'
 import { useToast } from '@/contexts/ToastContext'
 
-type UserEntry = { id: string; name: string; level: string }
-type VisibilityEntry = { id: string; target_user_id: string; name: string; level: string }
+type UserEntry = { id: string; name: string }
+type VisibilityEntry = { id: string; target_user_id: string; name: string }
 type OrgRow = {
   viewer_user_id: string
   viewer_name: string
-  viewer_level: string
   target_user_id: string
   target_name: string
-  target_level: string
   target_manager_user_id: string | null
 }
 type OrgNode = {
   id: string
   name: string
-  level: string
   isCrossTeam?: boolean
   children: OrgNode[]
 }
@@ -388,11 +385,10 @@ function ReportingSchema({ preselectedUserId }: { preselectedUserId: string | nu
   const loadUsers = useCallback((preselect: string | null) => {
     fetch('/api/masters/users')
       .then(r => r.json())
-      .then((data: { id: string; name: string; levels?: { name: string } | null }[]) => {
+      .then((data: { id: string; name: string }[]) => {
         const users: UserEntry[] = (data ?? []).map(u => ({
           id: u.id,
           name: u.name,
-          level: u.levels?.name ?? '',
         }))
         setAllUsers(users)
         if (preselect) {
@@ -516,7 +512,6 @@ function ReportingSchema({ preselectedUserId }: { preselectedUserId: string | nu
               >
                 <Avatar name={u.name} />
                 <span className="text-sm font-medium flex-1 truncate">{u.name}</span>
-                {u.level && <LevelBadge level={u.level} />}
                 {selectedUser?.id === u.id && <span className="text-blue-500 text-xs font-bold">●</span>}
               </button>
             ))}
@@ -551,7 +546,6 @@ function ReportingSchema({ preselectedUserId }: { preselectedUserId: string | nu
                       >
                         <Avatar name={u.name} />
                         <span className="flex-1">{u.name}</span>
-                        {u.level && <LevelBadge level={u.level} />}
                       </button>
                     ))}
                   </div>
@@ -586,7 +580,6 @@ function ReportingSchema({ preselectedUserId }: { preselectedUserId: string | nu
                 <span className="text-green-500 text-xs">✓</span>
                 <Avatar name={entry.name} />
                 <span className="text-sm font-medium flex-1 truncate">{entry.name}</span>
-                {entry.level && <LevelBadge level={entry.level} />}
                 <button
                   onClick={() => handleRemove(entry)}
                   className="text-gray-300 group-hover:text-red-400 hover:text-red-500 text-base leading-none ml-1 transition-colors"
@@ -667,32 +660,32 @@ function OrgChart() {
 
 function buildTree(rows: OrgRow[]): OrgNode[] {
   const visMap: Record<string, OrgRow[]> = {}
-  const metaMap: Record<string, { name: string; level: string }> = {}
+  const metaMap: Record<string, { name: string }> = {}
 
   for (const row of rows) {
     if (!visMap[row.viewer_user_id]) visMap[row.viewer_user_id] = []
     visMap[row.viewer_user_id].push(row)
-    metaMap[row.viewer_user_id] ??= { name: row.viewer_name, level: row.viewer_level }
-    metaMap[row.target_user_id] ??= { name: row.target_name, level: row.target_level }
+    metaMap[row.viewer_user_id] ??= { name: row.viewer_name }
+    metaMap[row.target_user_id] ??= { name: row.target_name }
   }
 
   const targetSet = new Set(rows.map(r => r.target_user_id))
   const roots = Object.keys(visMap).filter(id => !targetSet.has(id))
 
   const buildNode = (viewerId: string, visited: Set<string>): OrgNode => {
-    const meta = metaMap[viewerId] ?? { name: 'Unknown', level: '' }
-    if (visited.has(viewerId)) return { id: viewerId, name: meta.name, level: meta.level, children: [] }
+    const meta = metaMap[viewerId] ?? { name: 'Unknown' }
+    if (visited.has(viewerId)) return { id: viewerId, name: meta.name, children: [] }
     const nextVisited = new Set(visited)
     nextVisited.add(viewerId)
 
     const children: OrgNode[] = (visMap[viewerId] ?? []).map(row => {
       const child = visMap[row.target_user_id]
         ? buildNode(row.target_user_id, nextVisited)
-        : { id: row.target_user_id, name: row.target_name, level: row.target_level, children: [] }
+        : { id: row.target_user_id, name: row.target_name, children: [] }
       return { ...child, isCrossTeam: row.target_manager_user_id !== viewerId }
     })
 
-    return { id: viewerId, name: meta.name, level: meta.level, children }
+    return { id: viewerId, name: meta.name, children }
   }
 
   return roots.map(id => buildNode(id, new Set()))
@@ -723,7 +716,6 @@ function OrgNodeView({
       >
         <Avatar name={node.name} />
         <span className="font-medium text-sm">{node.name}</span>
-        {node.level && <LevelBadge level={node.level} />}
         {node.isCrossTeam && (
           <span className="text-[10px] text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full">cross-team</span>
         )}
@@ -772,10 +764,3 @@ function Avatar({ name }: { name: string }) {
   )
 }
 
-function LevelBadge({ level }: { level: string }) {
-  return (
-    <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap">
-      {level}
-    </span>
-  )
-}

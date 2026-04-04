@@ -53,6 +53,10 @@ const COLS: Column[] = [
     if (!d) return <span className="text-gray-400">—</span>
     return <span className="text-sm">{new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
   }},
+  { key: 'created_by', label: 'Created By', render: r => {
+    const u = r.created_by as { name: string } | null
+    return u ? <span className="text-sm">{u.name}</span> : <span className="text-gray-400">—</span>
+  }},
 ]
 
 // ── CSV helpers ───────────────────────────────────────────────────────────────
@@ -242,10 +246,11 @@ export default function LeadsPage() {
   const canDelete = isAdmin || (me?.permissions?.business?.delete ?? false)
 
   const bp = useBPForm()
-  const [open, setOpen]           = useState(false)
-  const [editing, setEditing]     = useState<Record<string, unknown> | null>(null)
-  const [saving, setSaving]       = useState(false)
-  const [bulkOpen, setBulkOpen]   = useState(false)
+  const [open, setOpen]         = useState(false)
+  const [editing, setEditing]   = useState<Record<string, unknown> | null>(null)
+  const [saving, setSaving]     = useState(false)
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const savingRef               = useRef(false)
   const [leadTypes, setLeadTypes] = useState<{ id: string; name: string }[]>([])
 
   useEffect(() => {
@@ -260,11 +265,14 @@ export default function LeadsPage() {
   function openEdit(row: Record<string, unknown>) { bp.reset(row); setEditing(row); setOpen(true) }
 
   async function handleSave() {
+    if (savingRef.current) return
     if (!bp.form.name.trim()) return
     if (!bp.validate()) return
+    savingRef.current = true
     setSaving(true)
     const body = { ...bp.buildBody(), type: bp.form.type || null }
     const ok = editing ? await crud.update(editing.id as string, body) : await crud.create(body)
+    savingRef.current = false
     setSaving(false)
     if (ok !== false && ok !== null) setOpen(false)
   }

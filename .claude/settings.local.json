@@ -1,4 +1,7 @@
 {
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
   "permissions": {
     "allow": [
       "Bash(claude mcp:*)",
@@ -30,7 +33,13 @@
       "Bash(npm audit:*)",
       "Bash(\"C:/Users/Aryan/documents/RGB_Software/testing/public/site.webmanifest\")",
       "Bash(cd:*)",
-      "Bash(grep -r \"const isAdmin = me?\\\\.role === ''''Administrator'''' || me?\\\\.role === ''''Superadmin''''\" . --include=\"*.tsx\")"
+      "Bash(grep -r \"const isAdmin = me?\\\\.role === ''''Administrator'''' || me?\\\\.role === ''''Superadmin''''\" . --include=\"*.tsx\")",
+      "Bash(head:*)",
+      "Bash(rm \"D:/RGB_Software/SFA/develop/src/app/api/masters/levels/[id]/route.ts\")",
+      "Bash(rmdir \"D:/RGB_Software/SFA/develop/src/app/api/masters/levels/[id]\")",
+      "Bash(ls \"D:/rgb_software/sfa/develop/src/app/\\(protected\\)/masters/dealers\")",
+      "Bash(ls \"D:/rgb_software/sfa/develop/src/app/\\(protected\\)/masters/distributors\")",
+      "Bash(ls \"D:/rgb_software/sfa/develop/src/app/\\(protected\\)/masters/institutions\")"
     ]
   },
   "enableAllProjectMcpServers": true,

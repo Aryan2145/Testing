@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
 
   const { data: subordinates } = await supabase
     .from('users')
-    .select('id, name, level_id, levels(name)')
+    .select('id, name')
     .in('id', subIds)
     .eq('tenant_id', tid)
 
@@ -141,11 +141,9 @@ export async function GET(req: NextRequest) {
       { meetingsCompleted: 0, meetingsTotal: 0, orderValue: 0, expenseAmount: 0 }
     )
 
-    const levelData = sub.levels as unknown as { name: string } | null
     return {
       userId: sub.id,
       userName: sub.name,
-      level: levelData?.name ?? '',
       planStatus: plan?.status ?? null,
       planId: plan?.id ?? null,
       dailyActivity,

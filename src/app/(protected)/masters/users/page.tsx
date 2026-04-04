@@ -9,10 +9,9 @@ import { useCrud } from '@/hooks/useCrud'
 import { useMe } from '@/hooks/useMe'
 import { useToast } from '@/contexts/ToastContext'
 
-type Level = { id: string; name: string; level_no: number }
 type Dept = { id: string; name: string }
 type Desig = { id: string; name: string; department_id: string }
-type UserRow = { id: string; name: string; level_id: string; levels?: Level; is_superadmin?: boolean }
+type UserRow = { id: string; name: string; is_superadmin?: boolean }
 type DeactivateSummary = { direct_reports: number; active_meetings: number; pending_plans: number; open_orders: number }
 type AuditEntry = { id: string; target_user_name: string; action: string; performed_by_name: string; metadata: Record<string, unknown>; created_at: string }
 
@@ -35,7 +34,6 @@ const COLS: Column[] = [
   { key: 'name', label: 'Name' },
   { key: 'contact', label: 'Contact' },
   { key: 'email', label: 'Email' },
-  { key: 'level', label: 'Level', render: r => (r.levels as Level | null)?.name ?? '' },
   { key: 'profile', label: 'Profile', render: r => r.is_superadmin
     ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">★ Superadmin</span>
     : String(r.profile ?? '')
@@ -44,7 +42,7 @@ const COLS: Column[] = [
   { key: 'status', label: 'Status', render: r => <StatusBadge status={String(r.status)} /> },
 ]
 
-const INIT = { name: '', email: '', contact: '', password: '', department_id: '', designation_id: '', level_id: '', profile: 'Standard', manager_user_id: '' }
+const INIT = { name: '', email: '', contact: '', password: '', department_id: '', designation_id: '', profile: 'Standard', manager_user_id: '' }
 
 export default function UsersPage() {
   const crud = useCrud('/api/masters/users', { scope: 'manage' })
@@ -61,7 +59,6 @@ export default function UsersPage() {
   const [formError, setFormError] = useState('')
   const [emailError, setEmailError] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [levels, setLevels] = useState<Level[]>([])
   const [depts, setDepts] = useState<Dept[]>([])
   const [allDesigs, setAllDesigs] = useState<Desig[]>([])
   const [allUsers, setAllUsers] = useState<UserRow[]>([])
@@ -91,7 +88,6 @@ export default function UsersPage() {
   }
 
   useEffect(() => {
-    fetch('/api/masters/levels').then(r => r.json()).then(d => setLevels(Array.isArray(d) ? d : [])).catch(() => toast('Failed to load user data. Please refresh.', 'error'))
     fetch('/api/masters/departments').then(r => r.json()).then(d => setDepts(Array.isArray(d) ? d : [])).catch(() => toast('Failed to load user data. Please refresh.', 'error'))
     fetch('/api/masters/designations').then(r => r.json()).then(d => setAllDesigs(Array.isArray(d) ? d : [])).catch(() => toast('Failed to load user data. Please refresh.', 'error'))
     refreshLists()
@@ -99,13 +95,10 @@ export default function UsersPage() {
 
   const atLimit = license !== null && license.limit !== null && license.used >= license.limit
 
-  const selectedLevel = levels.find(l => l.id === form.level_id)
   const activeUsers = allUsers.filter(u => (u as unknown as Record<string, unknown>).status === 'Active')
   const managerCandidates = activeUsers.filter(u => {
     if (editing && u.id === (editing.id as string)) return false
-    if (!selectedLevel) return true
-    const uLevel = levels.find(l => l.id === u.level_id)?.level_no ?? 99
-    return uLevel < selectedLevel.level_no
+    return true
   })
 
 
@@ -122,7 +115,7 @@ export default function UsersPage() {
     setFormError('')
     setEmailError('')
     setShowPassword(false)
-    setForm({ name: String(row.name), email: String(row.email), contact: String(row.contact), password: '', department_id: String(row.department_id ?? ''), designation_id: String(row.designation_id ?? ''), level_id: String(row.level_id), profile: String(row.profile), manager_user_id: String(row.manager_user_id ?? '') })
+    setForm({ name: String(row.name), email: String(row.email), contact: String(row.contact), password: '', department_id: String(row.department_id ?? ''), designation_id: String(row.designation_id ?? ''), profile: String(row.profile), manager_user_id: String(row.manager_user_id ?? '') })
     setOpen(true)
   }
 
@@ -134,11 +127,10 @@ export default function UsersPage() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) { setEmailError('Please enter a valid email address'); return }
     if (!form.contact.trim()) { setFormError('Contact number is required'); return }
     if (!/^\d{10}$/.test(form.contact.trim())) { setFormError('Contact number must be exactly 10 digits'); return }
-    if (!form.level_id) { setFormError('Level is required'); return }
     if (!form.profile) { setFormError('Profile is required'); return }
     if (!editing && !form.password.trim()) { setFormError('Password is required for new users'); return }
     setSaving(true)
-    const body: Record<string, unknown> = { name: form.name.trim(), email: form.email.trim(), contact: form.contact.trim(), department_id: form.department_id || null, designation_id: form.designation_id || null, level_id: form.level_id, profile: form.profile, manager_user_id: form.manager_user_id || null }
+    const body: Record<string, unknown> = { name: form.name.trim(), email: form.email.trim(), contact: form.contact.trim(), department_id: form.department_id || null, designation_id: form.designation_id || null, profile: form.profile, manager_user_id: form.manager_user_id || null }
     if (!editing || form.password.trim()) body.password = form.password.trim()
     try {
       const res = await fetch(editing ? `/api/masters/users/${editing.id as string}` : '/api/masters/users', {
@@ -372,10 +364,6 @@ export default function UsersPage() {
             <SearchableSelect value={form.designation_id} onChange={setF('designation_id')} options={allDesigs.map(d => ({ value: d.id, label: d.name }))} placeholder="Select desig…" />
           </div>
           <div>
-            <p className="block text-sm font-medium text-gray-700 mb-1">Level <span className="text-red-500">*</span></p>
-            <SearchableSelect value={form.level_id} onChange={v => setForm(f => ({ ...f, level_id: v, manager_user_id: '' }))} options={levels.map(l => ({ value: l.id, label: `L${l.level_no} - ${l.name}` }))} placeholder="Select level…" />
-          </div>
-          <div>
             <label htmlFor="user-profile" className="block text-sm font-medium text-gray-700 mb-1">Profile <span className="text-red-500">*</span></label>
             <select id="user-profile" name="profile" value={form.profile} onChange={e => setF('profile')(e.target.value)}
               disabled={me?.role !== 'Superadmin'}
@@ -385,18 +373,10 @@ export default function UsersPage() {
             </select>
             {me?.role !== 'Superadmin' && <p className="text-xs text-gray-400 mt-1">Role can only be changed by the Superadmin</p>}
           </div>
-          {selectedLevel?.level_no === 1 ? (
-            <div className="col-span-2">
-              <p className="text-xs text-gray-400 italic">Top of org chart — no manager required for L1 users</p>
-            </div>
-          ) : (
-            <div className="col-span-2">
-              <p className="block text-sm font-medium text-gray-700 mb-1">
-                Manager {selectedLevel?.level_no === 2 ? '(must be L1)' : selectedLevel?.level_no === 3 ? '(must be L1 or L2)' : ''}
-              </p>
-              <SearchableSelect value={form.manager_user_id} onChange={setF('manager_user_id')} options={managerCandidates.map(u => ({ value: u.id, label: `${u.name} (${levels.find(l => l.id === u.level_id)?.name ?? ''})` }))} placeholder="Select manager…" />
-            </div>
-          )}
+          <div className="col-span-2">
+            <p className="block text-sm font-medium text-gray-700 mb-1">Manager</p>
+            <SearchableSelect value={form.manager_user_id} onChange={setF('manager_user_id')} options={managerCandidates.map(u => ({ value: u.id, label: u.name }))} placeholder="Select manager…" />
+          </div>
         </div>
       </Modal>
 
@@ -496,7 +476,7 @@ export default function UsersPage() {
                 <SearchableSelect
                   value={reactivateForm.manager_user_id}
                   onChange={v => setReactivateForm(f => ({ ...f, manager_user_id: v }))}
-                  options={activeUsers.filter(u => u.id !== reactivateTarget.id).map(u => ({ value: u.id, label: `${u.name} (${levels.find(l => l.id === u.level_id)?.name ?? ''})` }))}
+                  options={activeUsers.filter(u => u.id !== reactivateTarget.id).map(u => ({ value: u.id, label: u.name }))}
                   placeholder="Select manager…"
                 />
               </div>
