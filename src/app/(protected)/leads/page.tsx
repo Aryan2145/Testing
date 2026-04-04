@@ -59,56 +59,53 @@ const COLS: Column[] = [
   }},
 ]
 
-// ── CSV helpers ───────────────────────────────────────────────────────────────
-const CSV_HEADERS = ['Name*', 'Type*', 'Contact Person', 'Mobile 1', 'Mobile 2', 'Email', 'GST Number', 'Pin Code', 'Address', 'State', 'District', 'Taluka', 'Stage (Prospect/Contacted/Interested/Qualified/Proposal/Negotiation)', 'Temperature (Cold/Warm/Hot)', 'Next Follow-up Date (YYYY-MM-DD)', 'Description']
-const CSV_KEYS    = ['name',  'type',  'contact_person_name', 'mobile_1', 'mobile_2', 'email', 'gst_number', 'pincode', 'address', 'state', 'district', 'taluka', 'stage', 'temperature', 'next_follow_up_date', 'description']
-
-function downloadTemplate() {
-  const sampleRow = ['ABC Solar', 'Residential', 'Ravi Kumar', '9876543210', '', 'ravi@example.com', '27AAPFU0939F1ZV', '411001', '123 Main St', 'Maharashtra', 'Pune', 'Haveli', 'Prospect', 'Warm', '2026-05-01', 'Interested in 3kW system']
-  const csv = [CSV_HEADERS.join(','), sampleRow.join(',')].join('\n')
-  const blob = new Blob([csv], { type: 'text/csv' })
-  const url  = URL.createObjectURL(blob)
-  const a    = document.createElement('a')
-  a.href = url; a.download = 'leads_template.csv'; a.click()
-  URL.revokeObjectURL(url)
-}
-
-function parseCSV(text: string): Record<string, string>[] {
-  const lines = text.trim().split(/\r?\n/)
-  if (lines.length < 2) return []
-  // skip header row
-  return lines.slice(1).map(line => {
-    const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''))
-    const obj: Record<string, string> = {}
-    CSV_KEYS.forEach((k, i) => { obj[k] = cols[i] ?? '' })
-    return obj
-  }).filter(r => r.name || r.type)
+// ── Template download (server-side, returns .xlsx with dropdowns) ─────────────
+async function downloadTemplate(onError: (msg: string) => void) {
+  try {
+    const res = await fetch('/api/leads/bulk-template')
+    if (!res.ok) { onError('Failed to generate template'); return }
+    const blob = await res.blob()
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href = url; a.download = 'leads_template.xlsx'; a.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    onError('Failed to download template')
+  }
 }
 
 // ── Bulk Upload Modal ─────────────────────────────────────────────────────────
 function BulkUploadModal({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: () => void }) {
   const { toast } = useToast()
   const fileRef = useRef<HTMLInputElement>(null)
-  const [rows, setRows]       = useState<Record<string, string>[]>([])
-  const [fileName, setFileName] = useState('')
+  const [rows, setRows]           = useState<Record<string, string>[]>([])
+  const [fileName, setFileName]   = useState('')
+  const [parsing, setParsing]     = useState(false)
   const [importing, setImporting] = useState(false)
-  const [result, setResult] = useState<{ inserted: number; errors: { row: number; message: string }[] } | null>(null)
+  const [result, setResult]       = useState<{ inserted: number; errors: { row: number; message: string }[] } | null>(null)
 
   function reset() { setRows([]); setFileName(''); setResult(null); if (fileRef.current) fileRef.current.value = '' }
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     setFileName(file.name)
     setResult(null)
-    const reader = new FileReader()
-    reader.onload = ev => {
-      const text = ev.target?.result as string
-      const parsed = parseCSV(text)
-      if (parsed.length === 0) { toast('No data rows found in CSV', 'error'); return }
-      setRows(parsed)
+    setRows([])
+    setParsing(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res  = await fetch('/api/leads/bulk-parse', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok) { toast(data.error ?? 'Failed to read file', 'error'); return }
+      if (!data.rows?.length) { toast('No data rows found in file', 'error'); return }
+      setRows(data.rows)
+    } catch {
+      toast('Failed to read file', 'error')
+    } finally {
+      setParsing(false)
     }
-    reader.readAsText(file)
   }
 
   async function handleImport() {
@@ -151,21 +148,28 @@ function BulkUploadModal({ open, onClose, onDone }: { open: boolean; onClose: ()
           {/* Step 1 */}
           <div>
             <p className="text-sm font-medium text-gray-700 mb-2">Step 1 — Download the template</p>
-            <button onClick={downloadTemplate}
+            <button onClick={() => downloadTemplate(msg => toast(msg, 'error'))}
               className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 rounded-lg px-4 py-2 transition">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-              Download CSV Template
+              Download Excel Template (.xlsx)
             </button>
-            <p className="text-xs text-gray-400 mt-1">Fill in the template. Columns marked * are required.</p>
+            <p className="text-xs text-gray-400 mt-1">Template includes dropdowns for Type, State, District, Taluka, Stage and Temperature — populated from your masters.</p>
           </div>
 
           {/* Step 2 */}
           <div>
-            <p className="text-sm font-medium text-gray-700 mb-2">Step 2 — Upload filled CSV</p>
+            <p className="text-sm font-medium text-gray-700 mb-2">Step 2 — Upload filled file</p>
             <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition">
-              <svg className="w-6 h-6 text-gray-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
-              <span className="text-sm text-gray-500">{fileName ? fileName : 'Click to select CSV file'}</span>
-              <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFile} />
+              {parsing ? (
+                <span className="text-sm text-blue-500">Reading file…</span>
+              ) : (
+                <>
+                  <svg className="w-6 h-6 text-gray-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
+                  <span className="text-sm text-gray-500">{fileName ? fileName : 'Click to select .xlsx file'}</span>
+                  <span className="text-xs text-gray-400 mt-0.5">Only the first (Leads) sheet is imported</span>
+                </>
+              )}
+              <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFile} />
             </label>
           </div>
 
